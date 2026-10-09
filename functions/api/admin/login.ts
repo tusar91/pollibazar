@@ -30,19 +30,71 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       return errorResponse('ইউজারনেম এবং পাসওয়ার্ড প্রদান করুন।', 400, undefined, request);
     }
 
+    const cleanUser = String(username).trim();
+    const cleanPass = String(password).trim();
+
     if (!env.DB) {
-      return errorResponse('ডাটাবেজ সংযোগ পাওয়া যায়নি।', 500, undefined, request);
+      // Offline/Local Development fallback without D1
+      if (cleanUser === 'admin' && cleanPass === 'Tt0171718411688727') {
+        const sessionToken = `pb-sess-${crypto.randomUUID()}`;
+        return jsonResponse(
+          {
+            success: true,
+            message: 'অ্যাডমিন লগইন সফল হয়েছে।',
+            token: sessionToken,
+            user: { id: 'adm-01', username: 'admin', role: 'admin' },
+          },
+          200,
+          {},
+          request
+        );
+      } else if (cleanUser === 'moderator' && cleanPass === '01717184116') {
+        const sessionToken = `pb-sess-mod-${crypto.randomUUID()}`;
+        return jsonResponse(
+          {
+            success: true,
+            message: 'মডারেটর লগইন সফল হয়েছে।',
+            token: sessionToken,
+            user: { id: 'adm-02', username: 'moderator', role: 'moderator' },
+          },
+          200,
+          {},
+          request
+        );
+      }
+      return errorResponse('ইউজারনেম অথবা পাসওয়ার্ড ভুল হয়েছে।', 401, undefined, request);
     }
 
-    const adminRecord: any = await env.DB.prepare(
+    let adminRecord: any = await env.DB.prepare(
       'SELECT id, username, password_hash, role FROM admins WHERE username = ?'
-    ).bind(String(username).trim()).first();
+    ).bind(cleanUser).first();
+
+    // Auto-seed admin or moderator if not yet present in D1
+    if (!adminRecord) {
+      if (cleanUser === 'moderator') {
+        const modHash = 'pbdevsalt2026:c08c589c7588769519b782ca579c0aaddaa6d5869cfaa70875c69969c794be93';
+        await env.DB.prepare(
+          'INSERT OR IGNORE INTO admins (id, username, password_hash, role) VALUES (?, ?, ?, ?)'
+        ).bind('adm-02', 'moderator', modHash, 'moderator').run().catch(() => {});
+        adminRecord = await env.DB.prepare(
+          'SELECT id, username, password_hash, role FROM admins WHERE username = ?'
+        ).bind('moderator').first();
+      } else if (cleanUser === 'admin') {
+        const admHash = 'pbdevsalt2026:2240fde2ce7fe263c486076ac52389fc95f11f88a98956716fd58f1bbac9c575';
+        await env.DB.prepare(
+          'INSERT OR IGNORE INTO admins (id, username, password_hash, role) VALUES (?, ?, ?, ?)'
+        ).bind('adm-01', 'admin', admHash, 'admin').run().catch(() => {});
+        adminRecord = await env.DB.prepare(
+          'SELECT id, username, password_hash, role FROM admins WHERE username = ?'
+        ).bind('admin').first();
+      }
+    }
 
     if (!adminRecord || !adminRecord.password_hash) {
       return errorResponse('ইউজারনেম অথবা পাসওয়ার্ড ভুল হয়েছে।', 401, undefined, request);
     }
 
-    const isValid = await verifyPassword(String(password).trim(), adminRecord.password_hash);
+    const isValid = await verifyPassword(cleanPass, adminRecord.password_hash);
     if (!isValid) {
       return errorResponse('ইউজারনেম অথবা পাসওয়ার্ড ভুল হয়েছে।', 401, undefined, request);
     }

@@ -1,10 +1,14 @@
 import React, { useState } from 'react';
-import { FolderTree, Plus, ShoppingBag, X } from 'lucide-react';
+import { FolderTree, Plus, ShoppingBag, X, Eye } from 'lucide-react';
 import { AdminLayout } from './AdminLayout';
 import { useProducts } from '../../context/ProductContext';
+import { useNavigation } from '../../context/NavigationContext';
 
 export const AdminCategoriesPage: React.FC = () => {
   const { categories, addCategory } = useProducts();
+  const { adminUserRole } = useNavigation();
+  const isModerator = adminUserRole === 'moderator';
+
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [catName, setCatName] = useState('');
   const [catSlug, setCatSlug] = useState('');
@@ -12,6 +16,7 @@ export const AdminCategoriesPage: React.FC = () => {
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isModerator) return;
     if (!catName.trim()) return;
     const slug = catSlug.trim() || catName.toLowerCase().replace(/[^a-z0-9]/g, '-');
     addCategory({
@@ -37,17 +42,24 @@ export const AdminCategoriesPage: React.FC = () => {
               ক্যাটাগরি ব্যবস্থাপনা (Categories)
             </h2>
             <p className="text-xs text-stone-500 mt-0.5">
-              মোট {categories.length} টি ক্যাটাগরি কনফিগার করা রয়েছে
+              মোট {categories.length} টি ক্যাটাগরি কনফিগার করা রয়েছে {isModerator && '(মডারেটর: রিড-অনলি)'}
             </p>
           </div>
 
-          <button
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>নতুন ক্যাটাগরি তৈরি করুন</span>
-          </button>
+          {!isModerator ? (
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>নতুন ক্যাটাগরি তৈরি করুন</span>
+            </button>
+          ) : (
+            <div className="px-3 py-1.5 bg-stone-100 border border-stone-200 rounded-xl text-xs text-stone-500 flex items-center gap-1.5">
+              <Eye className="w-3.5 h-3.5" />
+              <span>রিড-অনলি মোড (মডারেটর)</span>
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">

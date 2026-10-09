@@ -192,8 +192,9 @@ INSERT OR IGNORE INTO settings (key, value) VALUES
 ('delivery_charge_outside', '120'),
 ('free_delivery_threshold', '2500');
 
--- Production Admin User
--- Username: admin
--- Role: superadmin
+-- Production Admin & Moderator Users
+-- Admin: admin / Tt0171718411688727
+-- Moderator: moderator / 01717184116
 INSERT OR IGNORE INTO admins (id, username, password_hash, role) VALUES
-('adm-01', 'admin', 'pbdevsalt2026:2240fde2ce7fe263c486076ac52389fc95f11f88a98956716fd58f1bbac9c575', 'superadmin');
+('adm-01', 'admin', 'pbdevsalt2026:2240fde2ce7fe263c486076ac52389fc95f11f88a98956716fd58f1bbac9c575', 'admin'),
+('adm-02', 'moderator', 'pbdevsalt2026:c08c589c7588769519b782ca579c0aaddaa6d5869cfaa70875c69969c794be93', 'moderator');

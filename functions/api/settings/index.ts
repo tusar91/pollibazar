@@ -1,4 +1,4 @@
-import { Env, errorResponse, jsonResponse, verifyAdminSession } from '../_utils';
+import { Env, errorResponse, isAdminRole, jsonResponse, verifyAdminSession } from '../_utils';
 
 export async function onRequestGet(context: { env: Env }) {
   const { env } = context;
@@ -41,6 +41,10 @@ export async function onRequestPut(context: { request: Request; env: Env }) {
   const auth = await verifyAdminSession(request, env);
   if (!auth.isValid) {
     return errorResponse('অননুমোদিত অ্যাক্সেস। অনুগ্রহ করে লগইন করুন।', 401);
+  }
+
+  if (!isAdminRole(auth.role)) {
+    return errorResponse('শুধুমাত্র অ্যাডমিন স্টোর সেটিংস পরিবর্তন করতে পারেন। মডারেটরের এই অনুমতি নেই।', 403);
   }
 
   try {

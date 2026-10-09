@@ -1,4 +1,4 @@
-import { Env, errorResponse, jsonResponse, verifyAdminSession } from '../_utils';
+import { Env, errorResponse, isAdminRole, jsonResponse, verifyAdminSession } from '../_utils';
 
 export async function onRequestGet(context: { request: Request; env: Env }) {
   const { request, env } = context;
@@ -72,6 +72,10 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   const auth = await verifyAdminSession(request, env);
   if (!auth.isValid) {
     return errorResponse('অননুমোদিত অ্যাক্সেস। অনুগ্রহ করে লগইন করুন।', 401);
+  }
+
+  if (!isAdminRole(auth.role)) {
+    return errorResponse('শুধুমাত্র অ্যাডমিন পণ্য তৈরি করতে পারেন। মডারেটরের এই অনুমতি নেই।', 403);
   }
 
   try {

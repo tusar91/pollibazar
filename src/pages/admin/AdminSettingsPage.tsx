@@ -8,12 +8,16 @@ import {
   Save,
   Server,
   ShieldCheck,
+  ShieldAlert,
 } from 'lucide-react';
 import { AdminLayout } from './AdminLayout';
 import { useProducts } from '../../context/ProductContext';
+import { useNavigation } from '../../context/NavigationContext';
 
 export const AdminSettingsPage: React.FC = () => {
   const { resetToDefaults } = useProducts();
+  const { adminUserRole } = useNavigation();
+  const isModerator = adminUserRole === 'moderator';
 
   const [storeName, setStoreName] = useState('PolliBazar (পল্লি বাজার)');
   const [storePhone, setStorePhone] = useState('01712334707');
@@ -140,6 +144,35 @@ CREATE TABLE IF NOT EXISTS settings (
     setCopiedSql(true);
     setTimeout(() => setCopiedSql(false), 2000);
   };
+
+  if (isModerator) {
+    return (
+      <AdminLayout currentTab="admin-settings">
+        <div className="max-w-2xl bg-white border border-stone-200 rounded-2xl p-8 shadow-2xs space-y-4">
+          <div className="w-12 h-12 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+            <ShieldAlert className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-stone-900">
+              অননুমোদিত অ্যাক্সেস (Access Restricted)
+            </h2>
+            <p className="text-xs text-stone-500 mt-1 leading-relaxed">
+              স্টোর সেটিংস এবং ক্লাউডফ্লেয়ার D1 ডাটাবেজ ব্যাকআপ ও কনফিগারেশন সুবিধা শুধুমাত্র মূল অ্যাডমিন (Admin) অ্যাকাউন্টের জন্য সংরক্ষিত।
+            </p>
+          </div>
+          <div className="bg-stone-50 border border-stone-200 rounded-xl p-4 text-xs text-stone-700 space-y-1.5">
+            <p className="font-semibold text-stone-900">মডারেটর হিসেবে আপনার অনুমোদিত কাজসমূহ:</p>
+            <ul className="list-disc list-inside space-y-1 text-stone-600 pl-1">
+              <li>অর্ডারসমূহের তালিকা ও বিস্তারিত পর্যবেক্ষণ</li>
+              <li>অর্ডারের স্থিতি (Status) পরিবর্তন ও ডেলিভারি আপডেট</li>
+              <li>পণ্য ক্যাটালগ ও ক্যাটাগরি তালিকা পর্যবেক্ষণ</li>
+              <li>গ্রাহক তালিকা ও যোগাযোগের বিবরণী দেখা</li>
+            </ul>
+          </div>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout currentTab="admin-settings">

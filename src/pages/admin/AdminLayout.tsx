@@ -19,15 +19,51 @@ interface AdminLayoutProps {
 }
 
 export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentTab, children }) => {
-  const { navigate, adminLogout } = useNavigation();
+  const { navigate, adminLogout, adminUserRole, adminUsername } = useNavigation();
+
+  const isModerator = adminUserRole === 'moderator';
 
   const menuItems = [
-    { id: 'admin-dashboard', label: 'ড্যাশবোর্ড (Dashboard)', icon: LayoutDashboard, route: 'admin-dashboard' as AppRoute },
-    { id: 'admin-products', label: 'পণ্য তালিকা (Products)', icon: Boxes, route: 'admin-products' as AppRoute },
-    { id: 'admin-categories', label: 'ক্যাটাগরি (Categories)', icon: FolderTree, route: 'admin-categories' as AppRoute },
-    { id: 'admin-orders', label: 'অর্ডারসমূহ (Orders)', icon: ShoppingBag, route: 'admin-orders' as AppRoute },
-    { id: 'admin-customers', label: 'গ্রাহক তালিকা (Customers)', icon: Users, route: 'admin-customers' as AppRoute },
-    { id: 'admin-settings', label: 'সেটিংস ও D1 এক্সপোর্ট', icon: Settings, route: 'admin-settings' as AppRoute },
+    {
+      id: 'admin-dashboard',
+      label: 'ড্যাশবোর্ড (Dashboard)',
+      icon: LayoutDashboard,
+      route: 'admin-dashboard' as AppRoute,
+    },
+    {
+      id: 'admin-products',
+      label: isModerator ? 'পণ্য তালিকা (শুধুমাত্র দর্শন)' : 'পণ্য তালিকা (Products)',
+      icon: Boxes,
+      route: 'admin-products' as AppRoute,
+    },
+    {
+      id: 'admin-categories',
+      label: isModerator ? 'ক্যাটাগরি (শুধুমাত্র দর্শন)' : 'ক্যাটাগরি (Categories)',
+      icon: FolderTree,
+      route: 'admin-categories' as AppRoute,
+    },
+    {
+      id: 'admin-orders',
+      label: 'অর্ডারসমূহ (Orders)',
+      icon: ShoppingBag,
+      route: 'admin-orders' as AppRoute,
+    },
+    {
+      id: 'admin-customers',
+      label: 'গ্রাহক তালিকা (Customers)',
+      icon: Users,
+      route: 'admin-customers' as AppRoute,
+    },
+    ...(!isModerator
+      ? [
+          {
+            id: 'admin-settings',
+            label: 'সেটিংস ও D1 এক্সপোর্ট',
+            icon: Settings,
+            route: 'admin-settings' as AppRoute,
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -39,9 +75,20 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({ currentTab, children }
             PB
           </div>
           <div>
-            <h1 className="text-sm font-bold tracking-tight">PolliBazar Admin</h1>
-            <span className="text-[10px] text-emerald-400 block -mt-0.5">
-              Cloudflare Pages & D1 Database Powered
+            <div className="flex items-center gap-2">
+              <h1 className="text-sm font-bold tracking-tight">PolliBazar Admin</h1>
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                  isModerator
+                    ? 'bg-blue-900/80 text-blue-200 border border-blue-700'
+                    : 'bg-emerald-900/80 text-emerald-200 border border-emerald-700'
+                }`}
+              >
+                {isModerator ? 'মডারেটর (Moderator)' : 'অ্যাডমিন (Admin)'}
+              </span>
+            </div>
+            <span className="text-[10px] text-stone-400 block -mt-0.5">
+              ইউজার: {adminUsername || (isModerator ? 'moderator' : 'admin')}
             </span>
           </div>
         </div>

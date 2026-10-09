@@ -15,9 +15,14 @@ import { AdminLayout } from './AdminLayout';
 import { useProducts } from '../../context/ProductContext';
 import { Product } from '../../types';
 import { ProductImage } from '../../components/ProductImage';
+import { ProductImageUpload } from '../../components/admin/ProductImageUpload';
 import { DEFAULT_PRODUCT_IMAGE, PRESET_PRODUCT_IMAGES } from '../../services/imageStorage';
+import { useNavigation } from '../../context/NavigationContext';
 
 export const AdminProductsPage: React.FC = () => {
+  const { adminUserRole } = useNavigation();
+  const isModerator = adminUserRole === 'moderator';
+
   const {
     products,
     categories,
@@ -160,17 +165,24 @@ export const AdminProductsPage: React.FC = () => {
               পণ্য ব্যবস্থাপনা (Products)
             </h2>
             <p className="text-xs text-stone-500 mt-0.5">
-              মোট {products.length} টি পণ্য স্টোরে অন্তর্ভুক্ত রয়েছে
+              মোট {products.length} টি পণ্য স্টোরে অন্তর্ভুক্ত রয়েছে {isModerator && '(মডারেটর: রিড-অনলি)'}
             </p>
           </div>
 
-          <button
-            onClick={handleOpenAddModal}
-            className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
-          >
-            <Plus className="w-4 h-4" />
-            <span>নতুন পণ্য যোগ করুন</span>
-          </button>
+          {!isModerator ? (
+            <button
+              onClick={handleOpenAddModal}
+              className="px-4 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+            >
+              <Plus className="w-4 h-4" />
+              <span>নতুন পণ্য যোগ করুন</span>
+            </button>
+          ) : (
+            <div className="px-3 py-1.5 bg-stone-100 border border-stone-200 rounded-xl text-xs text-stone-500 flex items-center gap-1.5">
+              <Eye className="w-3.5 h-3.5" />
+              <span>রিড-অনলি মোড (মডারেটর)</span>
+            </div>
+          )}
         </div>
 
         {/* Filter bar */}
@@ -251,33 +263,40 @@ export const AdminProductsPage: React.FC = () => {
                     </td>
                     <td className="py-3 px-4">
                       <button
-                        onClick={() => toggleStock(p.id)}
-                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold cursor-pointer transition-colors ${
+                        onClick={isModerator ? undefined : () => toggleStock(p.id)}
+                        disabled={isModerator}
+                        className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition-colors ${
+                          isModerator ? 'cursor-default' : 'cursor-pointer'
+                        } ${
                           p.isAvailable && p.stock > 0
-                            ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                            : 'bg-rose-100 text-rose-800 hover:bg-rose-200'
+                            ? 'bg-emerald-100 text-emerald-800'
+                            : 'bg-rose-100 text-rose-800'
                         }`}
                       >
                         {p.isAvailable && p.stock > 0 ? 'ইন-স্টক (সক্রিয়)' : 'আউট অব স্টক'}
                       </button>
                     </td>
                     <td className="py-3 px-4 text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        <button
-                          onClick={() => handleOpenEditModal(p)}
-                          className="p-1.5 text-stone-500 hover:text-emerald-700 hover:bg-stone-100 rounded-lg transition-colors"
-                          title="সম্পাদনা"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(p.id, p.name)}
-                          className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
-                          title="মুছে ফেলুন"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      {!isModerator ? (
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => handleOpenEditModal(p)}
+                            className="p-1.5 text-stone-500 hover:text-emerald-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                            title="সম্পাদনা"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(p.id, p.name)}
+                            className="p-1.5 text-stone-500 hover:text-rose-600 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                            title="মুছে ফেলুন"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[10px] text-stone-400 italic">শুধুমাত্র দর্শন</span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -391,65 +410,11 @@ export const AdminProductsPage: React.FC = () => {
                 />
               </div>
 
-              {/* Product Image Section (Safe URL / Static Asset Alternative, No R2 needed) */}
-              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2.5">
-                <div className="flex items-center justify-between">
-                  <label className="font-semibold text-stone-800 flex items-center gap-1.5">
-                    <ImageIcon className="w-4 h-4 text-emerald-700" />
-                    <span>পণ্যের ছবি (Product Image)</span>
-                  </label>
-                  <span className="text-[10px] text-stone-500 bg-stone-200/60 px-2 py-0.5 rounded-md font-mono">
-                    URL বা প্রিসেট ফটো
-                  </span>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-3 items-start">
-                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-stone-300 bg-white shrink-0 shadow-2xs">
-                    <ProductImage
-                      src={formImage}
-                      alt="Preview"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <div className="flex-1 w-full space-y-2">
-                    <div>
-                      <label className="text-[11px] text-stone-600 font-medium block mb-0.5">
-                        ইমেজ লিংক (Image URL):
-                      </label>
-                      <input
-                        type="text"
-                        value={formImage}
-                        onChange={(e) => setFormImage(e.target.value)}
-                        placeholder="https://... অথবা /src/assets/images/..."
-                        className="w-full px-2.5 py-1.5 bg-white border border-stone-200 rounded-lg text-stone-900 font-mono text-[11px]"
-                      />
-                    </div>
-
-                    <div>
-                      <span className="text-[11px] text-stone-500 block mb-1">
-                        অথবা প্রিসেট ছবি থেকে নির্বাচন করুন:
-                      </span>
-                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
-                        {PRESET_PRODUCT_IMAGES.map((preset) => (
-                          <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => setFormImage(preset.url)}
-                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
-                              formImage === preset.url
-                                ? 'bg-emerald-100 text-emerald-900 border-emerald-400 font-bold'
-                                : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
-                            }`}
-                          >
-                            {preset.title}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
+              {/* Complete Product Image Upload Section */}
+              <ProductImageUpload
+                value={formImage}
+                onChange={(newUrl) => setFormImage(newUrl)}
+              />
 
               <div>
                 <label className="font-semibold text-stone-700 block mb-1">সংক্ষিপ্ত বিবরণ</label>

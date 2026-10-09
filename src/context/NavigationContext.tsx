@@ -28,7 +28,9 @@ interface NavigationContextType {
   openProduct: (productIdOrSlug: string) => void;
   openCategory: (categorySlug: string) => void;
   isAdminLoggedIn: boolean;
-  adminLogin: (token?: string) => void;
+  adminUserRole: string;
+  adminUsername: string;
+  adminLogin: (token?: string, user?: { id?: string; username?: string; role?: string }) => void;
   adminLogout: () => void;
 }
 
@@ -155,6 +157,22 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     }
   });
 
+  const [adminUserRole, setAdminUserRole] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pollibazar_user_role') || 'admin';
+    } catch {
+      return 'admin';
+    }
+  });
+
+  const [adminUsername, setAdminUsername] = useState<string>(() => {
+    try {
+      return localStorage.getItem('pollibazar_username') || 'admin';
+    } catch {
+      return 'admin';
+    }
+  });
+
   useEffect(() => {
     const handlePopState = () => {
       setRouteState(getRouteFromLocation());
@@ -212,12 +230,24 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     navigate('shop', { category: categorySlug });
   };
 
-  const adminLogin = (token?: string) => {
+  const adminLogin = (
+    token?: string,
+    user?: { id?: string; username?: string; role?: string }
+  ) => {
     setIsAdminLoggedIn(true);
+    if (user?.role) setAdminUserRole(user.role);
+    if (user?.username) setAdminUsername(user.username);
+
     try {
       localStorage.setItem('pollibazar_admin_auth', 'true');
       if (token) {
         localStorage.setItem('pb_session_token', token);
+      }
+      if (user?.role) {
+        localStorage.setItem('pollibazar_user_role', user.role);
+      }
+      if (user?.username) {
+        localStorage.setItem('pollibazar_username', user.username);
       }
     } catch {}
     navigate('admin-dashboard');
@@ -225,10 +255,14 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   const adminLogout = () => {
     setIsAdminLoggedIn(false);
+    setAdminUserRole('admin');
+    setAdminUsername('admin');
     try {
       const token = localStorage.getItem('pb_session_token') || '';
       localStorage.removeItem('pollibazar_admin_auth');
       localStorage.removeItem('pb_session_token');
+      localStorage.removeItem('pollibazar_user_role');
+      localStorage.removeItem('pollibazar_username');
       fetch('/api/admin/logout', {
         method: 'POST',
         credentials: 'include',
@@ -249,6 +283,8 @@ export const NavigationProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         openProduct,
         openCategory,
         isAdminLoggedIn,
+        adminUserRole,
+        adminUsername,
         adminLogin,
         adminLogout,
       }}

@@ -1,4 +1,4 @@
-import { Env, errorResponse, jsonResponse, verifyAdminSession } from '../_utils';
+import { Env, errorResponse, isAdminRole, isAuthorizedRole, isModeratorRole, jsonResponse, verifyAdminSession } from '../_utils';
 
 export async function onRequestGet(context: { params: { id: string }; env: Env }) {
   const { id } = context.params;
@@ -53,9 +53,56 @@ export async function onRequestPatch(context: { params: { id: string }; request:
     return errorResponse('অননুমোদিত অ্যাক্সেস। অনুগ্রহ করে লগইন করুন।', 401);
   }
 
+  const isMod = isModeratorRole(auth.role);
+  const isAdmin = isAdminRole(auth.role);
+
+  if (!isAdmin && !isMod) {
+    return errorResponse('আপনার এই অনুরোধটি সম্পাদনের অনুমতি নেই।', 403);
+  }
+
   try {
     const body: any = await request.json();
     const { status, paymentStatus } = body;
+
+    // Moderator RBAC restriction:
+    // Moderator can change only explicitly permitted order or fulfillment statuses
+    const ALLOWED_ORDER_STATUSES = [
+      'pending',
+      'placed',
+      'confirmed',
+      'processing',
+      'shipped',
+      'out_for_delivery',
+      'delivered',
+      'cancelled',
+    ];
+    const ALLOWED_PAYMENT_STATUSES = ['pending', 'paid', 'failed', 'refunded'];
+
+    if (isMod) {
+      // Validate that moderator does not submit arbitrary database fields
+      const submittedKeys = Object.keys(body || {});
+      const forbiddenKeys = submittedKeys.filter(
+        (key) => key !== 'status' && key !== 'paymentStatus'
+      );
+
+      if (forbiddenKeys.length > 0) {
+        return errorResponse(
+          'মডারেটর শুধুমাত্র অর্ডারের স্থিতি (Status) পরিবর্তন করতে পারেন। অন্য কোনো তথ্য পরিবর্তনের অনুমতি নেই।',
+          403
+        );
+      }
+
+      if (status !== undefined && !ALLOWED_ORDER_STATUSES.includes(String(status).toLowerCase())) {
+        return errorResponse(`অননুমোদিত অর্ডার স্ট্যাটাস: ${status}`, 400);
+      }
+
+      if (
+        paymentStatus !== undefined &&
+        !ALLOWED_PAYMENT_STATUSES.includes(String(paymentStatus).toLowerCase())
+      ) {
+        return errorResponse(`অননুমোদিত পেমেন্ট স্ট্যাটাস: ${paymentStatus}`, 400);
+      }
+    }
 
     if (env.DB) {
       await env.DB.prepare(`
@@ -74,4 +121,30 @@ export async function onRequestPatch(context: { params: { id: string }; request:
   } catch (e: any) {
     return errorResponse('অর্ডার আপডেট ব্যর্থ হয়েছে: ' + (e?.message || 'Error'), 500);
   }
+}
+
+export async function onRequestDelete(context: { params: { id: string }; request: Request; env: Env }) {
+  const { params, request, env } = context;
+  const auth = await verifyAdminSession(request, env);
+  if (!auth.isValid) {
+    return errorResponse('অননুমোদিত অ্যাক্সেস। অনুগ্রহ করে লগইন করুন।', 401);
+  }
+
+  // Only Admin can delete orders
+  if (!isAdminRole(auth.role)) {
+    return errorResponse('শুধুমাত্র অ্যাডমিন অর্ডার মুছে ফেলতে পারেন। মডারেটরের এই অনুমতি নেই।', 403);
+  }
+
+  if (env.DB) {
+    try {
+      await env.DB.prepare('DELETE FROM orders WHERE order_number = ? OR id = ?').bind(params.id, params.id).run();
+    } catch (e: any) {
+      return errorResponse('অর্ডার মুছতে সমস্যা হয়েছে: ' + (e?.message || 'Error'), 500);
+    }
+  }
+
+  return jsonResponse({
+    success: true,
+    message: 'অর্ডারটি সফলভাবে মুছে ফেলা হয়েছে।',
+  });
 }

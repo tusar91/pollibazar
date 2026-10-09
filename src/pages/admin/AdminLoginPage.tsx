@@ -37,9 +37,11 @@ export const AdminLoginPage: React.FC = () => {
         try {
           localStorage.setItem('pb_session_token', data.token);
           localStorage.setItem('pollibazar_admin_auth', 'true');
+          if (data.user?.role) localStorage.setItem('pollibazar_user_role', data.user.role);
+          if (data.user?.username) localStorage.setItem('pollibazar_username', data.user.username);
         } catch {}
         setLoading(false);
-        adminLogin(data.token);
+        adminLogin(data.token, data.user);
         return;
       } else {
         setLoading(false);
@@ -70,8 +72,34 @@ export const AdminLoginPage: React.FC = () => {
         <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-[11px] text-emerald-800 leading-relaxed flex items-start gap-2.5">
           <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
           <div>
-            <strong>নিরাপদ অ্যাডমিন প্যানেল:</strong> অনুমোদিত অ্যাডমিন ক্রেডেনশিয়াল দিয়ে নিরাপদে লগইন করে পল্লি বাজারের পণ্য তালিকা, ক্যাটাগরি ও গ্রাহকদের অর্ডার পরিচালনা করুন।
+            <strong>রোল-ভিত্তিক এক্সেস:</strong> অ্যাডমিন (পূর্ণ ক্ষমতা) অথবা মডারেটর (অর্ডার স্ট্যাটাস ব্যবস্থাপনা) একাউন্ট দিয়ে লগইন করুন।
           </div>
+        </div>
+
+        {/* Role Quick Selector */}
+        <div className="grid grid-cols-2 gap-2 p-1 bg-stone-100 rounded-xl border border-stone-200 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setUsername('admin')}
+            className={`py-2 px-3 rounded-lg text-center transition-all cursor-pointer ${
+              username === 'admin'
+                ? 'bg-white text-emerald-800 shadow-xs border border-stone-200'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            অ্যাডমিন (Admin)
+          </button>
+          <button
+            type="button"
+            onClick={() => setUsername('moderator')}
+            className={`py-2 px-3 rounded-lg text-center transition-all cursor-pointer ${
+              username === 'moderator'
+                ? 'bg-white text-emerald-800 shadow-xs border border-stone-200'
+                : 'text-stone-600 hover:text-stone-900'
+            }`}
+          >
+            মডারেটর (Moderator)
+          </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

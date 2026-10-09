@@ -61,6 +61,11 @@ export const AdminDashboardPage: React.FC = () => {
         }
       } catch {
         // Network or offline fallback
+        const savedRole = localStorage.getItem('pollibazar_user_role') || 'admin';
+        const savedUsername = localStorage.getItem('pollibazar_username') || 'admin';
+        if (isMounted) {
+          setAdminUser({ id: '1', username: savedUsername, role: savedRole });
+        }
       } finally {
         if (isMounted) {
           setIsVerifyingSession(false);
