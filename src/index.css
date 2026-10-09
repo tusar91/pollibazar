@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --primary: #15803d;
+    --primary-hover: #166534;
+    --secondary: #d97706;
+    --bg-main: #fafaf9;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text-main: #0f172a;
+    --text-muted: #64748b;
+  }
+
+  body {
+    font-family: 'Hind Siliguri', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #fafaf9;
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Tabular numbers for all monetary amounts */
+  .tabular-bdt {
+    font-variant-numeric: tabular-nums;
+  }
+}
+

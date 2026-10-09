@@ -1,0 +1,25 @@
+#:schema node_modules/wrangler/config-schema.json
+name = "pollibazar"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Cloudflare Pages Build Output Directory
+pages_build_output_dir = "dist"
+
+# Cloudflare D1 Database Binding
+[[d1_databases]]
+binding = "DB"
+database_name = "pollibazar-db"
+database_id = "c5cc8d6a-cb1c-44b9-a8d1-b39b364aa950"
+migrations_dir = "migrations"
+
+# Cloudflare R2 Bucket Binding (for Product Image Storage)
+[[r2_buckets]]
+binding = "IMAGES_BUCKET"
+bucket_name = "pollibazar-images"
+
+# Environment Variables
+[vars]
+ENVIRONMENT = "production"
+SITE_NAME = "PolliBazar"
+SITE_URL = "https://pollibazar.pages.dev"

@@ -1,0 +1,6 @@
+{
+  "name": "PolliBazar - অনলাইন গ্রোসারি ও ই-কমার্স",
+  "description": "গ্রামের পণ্য, আপনার ঘরে — বাংলাদেশের বিশ্বস্ত অনলাইন গ্রোসারি ও জেনারেল ই-কমার্স প্ল্যাটফর্ম। ক্যাশ অন ডেলিভারি, বিকাশ ও নগদ পেমেন্ট সুবিধা।",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
