@@ -1,4 +1,0 @@
-# Cloudflare Pages SPA Routing Redirects
-# All browser routes rewrite to index.html with HTTP 200
-/api/*          /api/:splat     200
-/*              /index.html     200

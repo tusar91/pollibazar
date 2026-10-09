@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite --port=3000 --host=0.0.0.0",
     "build": "vite build",
-    "postbuild": "node -e \"const fs = require('fs'); fs.cpSync('dist', 'build', { recursive: true });\"",
+    "postbuild": "node -e \"const fs = require('fs'); fs.copyFileSync('dist/index.html', 'dist/200.html'); fs.cpSync('dist', 'build', { recursive: true });\"",
     "pages:build": "vite build",
     "cloudflare:build": "vite build",
     "preview": "vite preview",

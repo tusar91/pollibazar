@@ -1,218 +1,86 @@
-// PolliBazar Image Storage Service
-// Handles client-side validation, IndexedDB local persistence, and Cloudflare R2 backend uploads
+// PolliBazar Product Image Asset & URL Utilities
+// Safe, Cloudflare Pages static and external URL management without R2 dependency
 
-const DB_NAME = 'pollibazar_image_store';
-const STORE_NAME = 'uploaded_images';
-const DB_VERSION = 1;
-
-// Maximum allowed image file size (5 Megabytes)
-export const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024;
-export const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
-// In-memory cache for fast blob URLs
-const memoryBlobUrlCache = new Map<string, string>();
-
-/**
- * Open or create the IndexedDB instance for image persistence
- */
-function openImageDb(): Promise<IDBDatabase | null> {
-  if (typeof window === 'undefined' || !window.indexedDB) {
-    return Promise.resolve(null);
-  }
-
-  return new Promise((resolve) => {
-    try {
-      const request = window.indexedDB.open(DB_NAME, DB_VERSION);
-
-      request.onupgradeneeded = (event: any) => {
-        const db = event.target?.result as IDBDatabase;
-        if (db && !db.objectStoreNames.contains(STORE_NAME)) {
-          db.createObjectStore(STORE_NAME);
-        }
-      };
-
-      request.onsuccess = (event: any) => {
-        resolve(event.target?.result as IDBDatabase);
-      };
-
-      request.onerror = () => {
-        resolve(null);
-      };
-    } catch {
-      resolve(null);
-    }
-  });
+export interface PresetProductImage {
+  id: string;
+  title: string;
+  category: string;
+  url: string;
 }
 
-/**
- * Save image blob to IndexedDB
- */
-export async function saveImageToLocalStore(key: string, blob: Blob): Promise<void> {
-  // Update in-memory cache
-  try {
-    const existing = memoryBlobUrlCache.get(key);
-    if (existing) {
-      URL.revokeObjectURL(existing);
-    }
-    const blobUrl = URL.createObjectURL(blob);
-    memoryBlobUrlCache.set(key, blobUrl);
-  } catch {}
-
-  const db = await openImageDb();
-  if (!db) return;
-
-  return new Promise((resolve) => {
-    try {
-      const transaction = db.transaction(STORE_NAME, 'readwrite');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.put(blob, key);
-
-      request.onsuccess = () => resolve();
-      request.onerror = () => resolve();
-    } catch {
-      resolve();
-    }
-  });
-}
+export const DEFAULT_PRODUCT_IMAGE = '/src/assets/images/category_daily_bazaar_1791438890146.jpg';
 
 /**
- * Retrieve image blob from IndexedDB
+ * Curated high-resolution static product images available locally in the project
  */
-export async function getImageFromLocalStore(key: string): Promise<Blob | null> {
-  const db = await openImageDb();
-  if (!db) return null;
-
-  return new Promise((resolve) => {
-    try {
-      const transaction = db.transaction(STORE_NAME, 'readonly');
-      const store = transaction.objectStore(STORE_NAME);
-      const request = store.get(key);
-
-      request.onsuccess = (event: any) => {
-        resolve(event.target?.result || null);
-      };
-      request.onerror = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-}
+export const PRESET_PRODUCT_IMAGES: PresetProductImage[] = [
+  {
+    id: 'groceries',
+    title: 'মিনিকেট চাল ও গ্রোসারি',
+    category: 'grocery',
+    url: '/src/assets/images/hero_fresh_groceries_1791438853885.jpg',
+  },
+  {
+    id: 'harvest',
+    title: 'সরিষার তেল ও গ্রামীণ ফসল',
+    category: 'grocery',
+    url: '/src/assets/images/hero_village_harvest_1791438866620.jpg',
+  },
+  {
+    id: 'honey',
+    title: 'খাঁটি প্রাকৃতিক মধু',
+    category: 'food',
+    url: '/src/assets/images/promo_mustard_honey_1791438879357.jpg',
+  },
+  {
+    id: 'vegetables',
+    title: 'তাজা শাকসবজি',
+    category: 'vegetables',
+    url: '/src/assets/images/category_fresh_vegetables_1791440561440.jpg',
+  },
+  {
+    id: 'daily_bazaar',
+    title: 'নিত্যদিনের বাজার ও পণ্য',
+    category: 'grocery',
+    url: '/src/assets/images/category_daily_bazaar_1791438890146.jpg',
+  },
+  {
+    id: 'tea_leaves',
+    title: 'প্রিমিয়াম চা পাতা',
+    category: 'food',
+    url: '/src/assets/images/promo_mustard_honey_1791438879357.jpg',
+  },
+  {
+    id: 'beauty',
+    title: 'ভেষজ ও রূপচর্চা পণ্য',
+    category: 'beauty',
+    url: '/src/assets/images/category_beauty_herbal_1791440546624.jpg',
+  },
+  {
+    id: 'fashion',
+    title: 'পোশাক ও তাঁতশিল্প',
+    category: 'clothing',
+    url: '/src/assets/images/category_fashion_1791440518720.jpg',
+  },
+  {
+    id: 'electronics',
+    title: 'ইলেকট্রনিক্স ও গেজেট',
+    category: 'electronics',
+    url: '/src/assets/images/category_electronics_1791440532857.jpg',
+  },
+];
 
 /**
- * Retrieve cached blob URL for a stable image path
+ * Validate product image URL
  */
-export async function getResolvedImageUrl(pathOrUrl: string): Promise<string> {
-  if (!pathOrUrl) return '';
-
-  // Non-upload paths (static assets or external CDN)
-  if (!pathOrUrl.startsWith('/api/uploads/')) {
-    return pathOrUrl;
+export function isValidProductImageUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (trimmed.startsWith('/src/assets/images/') || trimmed.startsWith('/images/')) {
+    return true;
   }
-
-  // Check in-memory cache first
-  const cached = memoryBlobUrlCache.get(pathOrUrl);
-  if (cached) return cached;
-
-  // Check IndexedDB
-  const blob = await getImageFromLocalStore(pathOrUrl);
-  if (blob) {
-    const blobUrl = URL.createObjectURL(blob);
-    memoryBlobUrlCache.set(pathOrUrl, blobUrl);
-    return blobUrl;
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return true;
   }
-
-  return pathOrUrl;
-}
-
-/**
- * Client-side validation for image files
- */
-export function validateImageFile(file: File): { valid: boolean; error?: string } {
-  if (!file) {
-    return { valid: false, error: 'কোনো ফাইল নির্বাচন করা হয়নি।' };
-  }
-
-  if (!ALLOWED_IMAGE_TYPES.includes(file.type.toLowerCase())) {
-    return {
-      valid: false,
-      error: 'শুধুমাত্র JPG, JPEG, PNG এবং WebP ফরম্যাটের ছবি আপলোড করা যাবে।',
-    };
-  }
-
-  if (file.size > MAX_IMAGE_SIZE_BYTES) {
-    const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
-    return {
-      valid: false,
-      error: `ফাইলের আকার (${sizeMb} MB) অনুমোদিত সীমা (৫ MB) অতিক্রম করেছে।`,
-    };
-  }
-
-  if (file.size === 0) {
-    return { valid: false, error: 'ফাইলটি খালি বা ত্রুটিপূর্ণ।' };
-  }
-
-  return { valid: true };
-}
-
-/**
- * Upload an image file to the PolliBazar backend and store locally for resilient fallback
- */
-export async function uploadProductImage(
-  file: File,
-  productId?: string
-): Promise<{ success: boolean; url: string; error?: string }> {
-  // 1. Client-side validation
-  const validation = validateImageFile(file);
-  if (!validation.valid) {
-    return { success: false, url: '', error: validation.error };
-  }
-
-  // 2. Generate a stable URL path
-  const ext = file.name.split('.').pop()?.toLowerCase() || 'webp';
-  const safeExt = ['jpg', 'jpeg', 'png', 'webp'].includes(ext) ? ext : 'webp';
-  const cleanId = (productId || 'prod').replace(/[^a-zA-Z0-9_-]/g, '');
-  const timestamp = Date.now();
-  const randomSuffix = Math.random().toString(36).slice(2, 8);
-  const stableKey = `products/${cleanId}-${timestamp}-${randomSuffix}.${safeExt}`;
-  const stableUrl = `/api/uploads/${stableKey}`;
-
-  // 3. Immediately store the blob in local IndexedDB keyed by the stable URL
-  await saveImageToLocalStore(stableUrl, file);
-
-  // 4. Send to backend endpoint for Cloudflare R2 / D1 persistence
-  try {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (productId) {
-      formData.append('productId', productId);
-    }
-    formData.append('stableKey', stableKey);
-
-    const token = localStorage.getItem('pb_session_token') || '';
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      credentials: 'include',
-      body: formData,
-    });
-
-    if (res.ok) {
-      const data: any = await res.json().catch(() => null);
-      if (data?.success && data?.url) {
-        // Backend upload succeeded
-        if (data.url !== stableUrl) {
-          // If backend generated a different URL, cache to that one too
-          await saveImageToLocalStore(data.url, file);
-        }
-        return { success: true, url: data.url };
-      }
-    }
-  } catch (err) {
-    console.warn('Backend image upload network notice; relying on resilient local store:', err);
-  }
-
-  // If backend was unreachable or in offline/client mode, the stable URL backed by IndexedDB is returned
-  return { success: true, url: stableUrl };
+  return false;
 }

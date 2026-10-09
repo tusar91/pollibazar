@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useOrders } from '../context/OrderContext';
 import { useNavigation } from '../context/NavigationContext';
+import { ProductImage } from '../components/ProductImage';
 
 export const OrderSuccessPage: React.FC = () => {
   const { orders, recentPlacedOrder } = useOrders();
@@ -167,7 +168,7 @@ export const OrderSuccessPage: React.FC = () => {
           {order.items.map((item, idx) => (
             <div key={idx} className="py-3 flex items-center justify-between gap-3 text-xs">
               <div className="flex items-center gap-3">
-                <img
+                <ProductImage
                   src={item.image}
                   alt={item.name}
                   className="w-10 h-10 object-cover rounded-lg border border-stone-200"

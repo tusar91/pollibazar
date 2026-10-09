@@ -12,6 +12,7 @@ import { useCart } from '../context/CartContext';
 import { useOrders } from '../context/OrderContext';
 import { useNavigation } from '../context/NavigationContext';
 import { PaymentMethod } from '../types';
+import { ProductImage } from '../components/ProductImage';
 
 export const CheckoutPage: React.FC = () => {
   const {
@@ -530,7 +531,7 @@ export const CheckoutPage: React.FC = () => {
               <div className="max-h-60 overflow-y-auto divide-y divide-stone-100 pr-1">
                 {cart.map((item) => (
                   <div key={item.product.id} className="py-2.5 flex items-center gap-3 first:pt-0">
-                    <img
+                    <ProductImage
                       src={item.product.image}
                       alt={item.product.name}
                       className="w-12 h-12 object-cover rounded-lg border border-stone-200 bg-stone-50 shrink-0"

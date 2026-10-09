@@ -3,7 +3,6 @@
 
 export interface Env {
   DB?: any;
-  IMAGES_BUCKET?: any; // Cloudflare R2 bucket binding
   ADMIN_SECRET?: string;
   ENVIRONMENT?: string;
 }

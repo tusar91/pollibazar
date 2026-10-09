@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useNavigation } from '../context/NavigationContext';
+import { ProductImage } from '../components/ProductImage';
 
 export const CartPage: React.FC = () => {
   const {
@@ -91,7 +92,7 @@ export const CartPage: React.FC = () => {
               <div className="divide-y divide-stone-100">
                 {cart.map((item) => (
                   <div key={item.product.id} className="p-4 sm:p-6 flex flex-col sm:flex-row gap-4 sm:items-center">
-                    <img
+                    <ProductImage
                       src={item.product.image}
                       alt={item.product.name}
                       className="w-20 h-20 object-cover rounded-xl bg-stone-100 border border-stone-200 shrink-0"

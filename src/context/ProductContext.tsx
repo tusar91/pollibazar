@@ -102,6 +102,21 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCategories((prev) =>
       prev.map((c) => (c.slug === newProduct.category ? { ...c, count: c.count + 1 } : c))
     );
+
+    // Sync to backend D1 database if authenticated
+    try {
+      const token = localStorage.getItem('pb_session_token') || '';
+      fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify(newProduct),
+      }).catch((err) => console.warn('D1 product sync notice:', err));
+    } catch {}
+
     return newProduct;
   };
 
@@ -109,6 +124,21 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setProducts((prev) =>
       prev.map((p) => (p.id === id ? { ...p, ...updated } : p))
     );
+
+    // Sync to backend D1 database if authenticated
+    try {
+      const token = localStorage.getItem('pb_session_token') || '';
+      fetch(`/api/products/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+        body: JSON.stringify(updated),
+      }).catch((err) => console.warn('D1 product update sync notice:', err));
+    } catch {}
+
     return true;
   };
 
@@ -119,6 +149,19 @@ export const ProductProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setCategories((prev) =>
       prev.map((c) => (c.slug === prod.category ? { ...c, count: Math.max(0, c.count - 1) } : c))
     );
+
+    // Sync to backend D1 database if authenticated
+    try {
+      const token = localStorage.getItem('pb_session_token') || '';
+      fetch(`/api/products/${id}`, {
+        method: 'DELETE',
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        credentials: 'include',
+      }).catch((err) => console.warn('D1 product delete sync notice:', err));
+    } catch {}
+
     return true;
   };
 

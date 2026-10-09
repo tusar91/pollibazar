@@ -13,6 +13,7 @@ import {
 import { AdminLayout } from './AdminLayout';
 import { useOrders } from '../../context/OrderContext';
 import { Order, OrderStatus } from '../../types';
+import { ProductImage } from '../../components/ProductImage';
 
 export const AdminOrdersPage: React.FC = () => {
   const { orders, updateOrderStatus, deleteOrder } = useOrders();
@@ -216,9 +217,9 @@ export const AdminOrdersPage: React.FC = () => {
               {selectedOrder.items.map((item, idx) => (
                 <div key={idx} className="py-2 flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <img
+                    <ProductImage
                       src={item.image}
-                      alt=""
+                      alt={item.name}
                       className="w-8 h-8 rounded object-cover border"
                     />
                     <div>

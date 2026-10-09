@@ -9,10 +9,13 @@ import {
   Check,
   AlertCircle,
   Eye,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { AdminLayout } from './AdminLayout';
 import { useProducts } from '../../context/ProductContext';
 import { Product } from '../../types';
+import { ProductImage } from '../../components/ProductImage';
+import { DEFAULT_PRODUCT_IMAGE, PRESET_PRODUCT_IMAGES } from '../../services/imageStorage';
 
 export const AdminProductsPage: React.FC = () => {
   const {
@@ -39,6 +42,7 @@ export const AdminProductsPage: React.FC = () => {
   const [formStock, setFormStock] = useState<number>(50);
   const [formOrigin, setFormOrigin] = useState('');
   const [formShortDesc, setFormShortDesc] = useState('');
+  const [formImage, setFormImage] = useState<string>(DEFAULT_PRODUCT_IMAGE);
 
   const filteredProducts = products.filter((p) => {
     const matchesCat = selectedCategory === 'all' || p.category === selectedCategory;
@@ -59,6 +63,7 @@ export const AdminProductsPage: React.FC = () => {
     setFormStock(50);
     setFormOrigin('ঢাকা');
     setFormShortDesc('খাঁটি দেশি ও স্বাস্থ্যসম্মত মান।');
+    setFormImage(DEFAULT_PRODUCT_IMAGE);
     setIsAddModalOpen(true);
   };
 
@@ -72,6 +77,7 @@ export const AdminProductsPage: React.FC = () => {
     setFormStock(p.stock);
     setFormOrigin(p.origin || '');
     setFormShortDesc(p.shortDescription);
+    setFormImage(p.image || DEFAULT_PRODUCT_IMAGE);
     setIsAddModalOpen(true);
   };
 
@@ -82,6 +88,7 @@ export const AdminProductsPage: React.FC = () => {
     const catObj = categories.find((c) => c.slug === formCategory);
     const catName = catObj ? catObj.name : 'মুদি';
     const slug = formName.toLowerCase().replace(/[^a-z0-9]/g, '-') + '-' + Date.now().toString().slice(-4);
+    const selectedImage = formImage.trim() || DEFAULT_PRODUCT_IMAGE;
 
     if (editingProduct) {
       updateProduct(editingProduct.id, {
@@ -98,6 +105,8 @@ export const AdminProductsPage: React.FC = () => {
         stock: formStock,
         origin: formOrigin.trim(),
         shortDescription: formShortDesc.trim(),
+        image: selectedImage,
+        gallery: [selectedImage],
         isAvailable: formStock > 0,
       });
     } else {
@@ -112,8 +121,8 @@ export const AdminProductsPage: React.FC = () => {
           formOldPrice > formPrice
             ? Math.round(((formOldPrice - formPrice) / formOldPrice) * 100)
             : undefined,
-        image: '/src/assets/images/category_daily_bazaar_1791438890146.jpg',
-        gallery: ['/src/assets/images/category_daily_bazaar_1791438890146.jpg'],
+        image: selectedImage,
+        gallery: [selectedImage],
         unit: formUnit.trim(),
         stock: formStock,
         isAvailable: formStock > 0,
@@ -213,7 +222,7 @@ export const AdminProductsPage: React.FC = () => {
                   <tr key={p.id} className="hover:bg-stone-50/60 transition-colors">
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <img
+                        <ProductImage
                           src={p.image}
                           alt={p.name}
                           className="w-10 h-10 object-cover rounded-lg border border-stone-200 bg-stone-50 shrink-0"
@@ -380,6 +389,66 @@ export const AdminProductsPage: React.FC = () => {
                   placeholder="যেমন: দিনাজপুর, মানিকগঞ্জ, দোহার"
                   className="w-full px-3 py-2 bg-stone-50 border border-stone-200 rounded-lg text-stone-900"
                 />
+              </div>
+
+              {/* Product Image Section (Safe URL / Static Asset Alternative, No R2 needed) */}
+              <div className="bg-stone-50 border border-stone-200 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <label className="font-semibold text-stone-800 flex items-center gap-1.5">
+                    <ImageIcon className="w-4 h-4 text-emerald-700" />
+                    <span>পণ্যের ছবি (Product Image)</span>
+                  </label>
+                  <span className="text-[10px] text-stone-500 bg-stone-200/60 px-2 py-0.5 rounded-md font-mono">
+                    URL বা প্রিসেট ফটো
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-3 items-start">
+                  <div className="relative w-20 h-20 rounded-lg overflow-hidden border border-stone-300 bg-white shrink-0 shadow-2xs">
+                    <ProductImage
+                      src={formImage}
+                      alt="Preview"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  <div className="flex-1 w-full space-y-2">
+                    <div>
+                      <label className="text-[11px] text-stone-600 font-medium block mb-0.5">
+                        ইমেজ লিংক (Image URL):
+                      </label>
+                      <input
+                        type="text"
+                        value={formImage}
+                        onChange={(e) => setFormImage(e.target.value)}
+                        placeholder="https://... অথবা /src/assets/images/..."
+                        className="w-full px-2.5 py-1.5 bg-white border border-stone-200 rounded-lg text-stone-900 font-mono text-[11px]"
+                      />
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-stone-500 block mb-1">
+                        অথবা প্রিসেট ছবি থেকে নির্বাচন করুন:
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                        {PRESET_PRODUCT_IMAGES.map((preset) => (
+                          <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => setFormImage(preset.url)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors border ${
+                              formImage === preset.url
+                                ? 'bg-emerald-100 text-emerald-900 border-emerald-400 font-bold'
+                                : 'bg-white text-stone-700 border-stone-200 hover:bg-stone-100'
+                            }`}
+                          >
+                            {preset.title}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <div>

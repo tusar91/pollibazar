@@ -13,11 +13,6 @@ database_name = "pollibazar-db"
 database_id = "c5cc8d6a-cb1c-44b9-a8d1-b39b364aa950"
 migrations_dir = "migrations"
 
-# Cloudflare R2 Bucket Binding (for Product Image Storage)
-[[r2_buckets]]
-binding = "IMAGES_BUCKET"
-bucket_name = "pollibazar-images"
-
 # Environment Variables
 [vars]
 ENVIRONMENT = "production"
