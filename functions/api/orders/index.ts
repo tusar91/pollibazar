@@ -211,14 +211,14 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       let imageUrl = item.image || '';
       let validProductId = String(item.id || '');
 
-      // Query product in D1 using existing status and stock columns
+      // Query product in D1 using verified columns (id, name, price, stock, unit, image)
       const dbProduct: any = await env.DB.prepare(
-        'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+        'SELECT id, name, price, stock, unit, image FROM products WHERE id = ? OR slug = ?'
       ).bind(item.id, item.id).first();
 
       if (dbProduct) {
-        const isAvailable = dbProduct.status ? dbProduct.status === 'active' : true;
         const hasStock = dbProduct.stock !== null && dbProduct.stock !== undefined ? Number(dbProduct.stock) >= quantity : true;
+        const isAvailable = dbProduct.stock !== null && dbProduct.stock !== undefined ? Number(dbProduct.stock) > 0 : true;
         if (!isAvailable || !hasStock) {
           return errorResponse(`দুঃখিত, "${dbProduct.name}" বর্তমানে পর্যাপ্ত স্টকে নেই বা বিক্রির জন্য সক্রিয় নয়।`, 409, undefined, request);
         }
@@ -232,8 +232,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         const safeSlug = `prod-${validProductId.toLowerCase().replace(/[^a-z0-9]/g, '-') || Date.now()}`;
         await env.DB.prepare(`
           INSERT OR IGNORE INTO products (
-            id, name, slug, category_id, price, unit, image, stock, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 'active')
+            id, name, slug, category_id, price, unit, image, stock
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 100)
         `).bind(
           validProductId,
           productName,
@@ -242,7 +242,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
           unitPrice > 0 ? unitPrice : 100,
           unit,
           imageUrl || '/images/default.jpg'
-        ).run().catch((e) => {
+        ).run().catch((e: any) => {
           console.warn('Notice: Product auto-seed notice:', e);
         });
       }

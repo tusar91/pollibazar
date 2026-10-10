@@ -16,8 +16,8 @@ export async function onRequestGet(context: { request: Request; env: Env }) {
           p.price, p.old_price as oldPrice, p.discount, p.unit, p.image, p.gallery,
           p.short_description as shortDescription, p.description, p.rating, 
           p.review_count as reviewCount, p.stock,
-          (CASE WHEN (p.status = 'active' OR p.status IS NULL) AND (p.stock IS NULL OR p.stock > 0) THEN 1 ELSE 0 END) as inStock,
-          p.origin, p.featured, p.new_arrival as newArrival, p.status
+          (CASE WHEN p.stock IS NULL OR p.stock > 0 THEN 1 ELSE 0 END) as inStock,
+          p.origin, p.featured, p.new_arrival as newArrival
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.slug
         WHERE 1=1
@@ -50,6 +50,7 @@ export async function onRequestGet(context: { request: Request; env: Env }) {
         data: (results || []).map((r: any) => ({
           ...r,
           inStock: Boolean(r.inStock),
+          isAvailable: Boolean(r.inStock && (r.stock === null || r.stock === undefined || Number(r.stock) > 0)),
           featured: Boolean(r.featured),
           newArrival: Boolean(r.newArrival),
           gallery: r.gallery ? JSON.parse(r.gallery) : undefined,
@@ -93,8 +94,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         INSERT INTO products (
           id, name, slug, category_id, price, old_price, discount, unit,
           image, short_description, description, rating, review_count, stock,
-          origin, featured, new_arrival, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          origin, featured, new_arrival
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id,
         body.name,
@@ -112,8 +113,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         body.stock !== undefined ? Number(body.stock) : 10,
         body.origin || '',
         body.featured ? 1 : 0,
-        body.newArrival ? 1 : 0,
-        body.status || (body.inStock !== false ? 'active' : 'inactive')
+        body.newArrival ? 1 : 0
       ).run();
 
       // Record image into product_images table (Requirement 3)

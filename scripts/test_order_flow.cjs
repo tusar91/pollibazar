@@ -27,7 +27,6 @@ db.exec(`
     origin TEXT,
     featured BOOLEAN DEFAULT 0,
     new_arrival BOOLEAN DEFAULT 0,
-    status TEXT DEFAULT 'active',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   );
@@ -116,21 +115,21 @@ db.exec(`
   INSERT INTO categories (id, name, name_en, slug, icon, count, description)
   VALUES ('cat-1', 'মুদি', 'Grocery', 'grocery', 'ShoppingBasket', 8, 'নিত্যপণ্য');
 
-  INSERT INTO products (id, name, slug, category_id, price, unit, image, stock, status)
+  INSERT INTO products (id, name, slug, category_id, price, unit, image, stock)
   VALUES 
-    ('pb-01', 'মিনিকেট চাল', 'miniket-rice', 'cat-1', 375, '৫ কেজি বস্তা', '/img/rice.jpg', 50, 'active'),
-    ('pb-02', 'সরিষার তেল', 'mustard-oil', 'cat-1', 220, '১ লিটার বোতল', '/img/oil.jpg', 0, 'active'),
-    ('pb-03', 'খেজুর গুড়', 'date-jaggery', 'cat-1', 350, '১ কেজি হাড়ি', '/img/gur.jpg', 10, 'inactive');
+    ('pb-01', 'মিনিকেট চাল', 'miniket-rice', 'cat-1', 375, '৫ কেজি বস্তা', '/img/rice.jpg', 50),
+    ('pb-02', 'সরিষার তেল', 'mustard-oil', 'cat-1', 220, '১ লিটার বোতল', '/img/oil.jpg', 0),
+    ('pb-03', 'খেজুর গুড়', 'date-jaggery', 'cat-1', 350, '১ কেজি হাড়ি', '/img/gur.jpg', 10);
 
   INSERT INTO settings (key, value) VALUES ('free_delivery_threshold', '2500');
 `);
 
-console.log('✓ Successfully created production-equivalent schema (WITHOUT is_available column)');
+console.log('✓ Successfully created production-equivalent schema (WITHOUT status or is_available columns)');
 
 // 2. Test Product Query in functions/api/orders/index.ts
-// Verify that the query no longer fails with "no such column: is_available"
+// Verify that the query no longer fails with "no such column: status" or "is_available"
 const queriedProduct = db.prepare(
-  'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+  'SELECT id, name, price, stock, unit, image FROM products WHERE id = ? OR slug = ?'
 ).get('pb-01', 'pb-01');
 
 console.log('✓ Product query executed without column errors:', queriedProduct);
@@ -140,20 +139,21 @@ if (!queriedProduct || queriedProduct.name !== 'মিনিকেট চাল'
 
 // Test out-of-stock product validation
 const outOfStockProduct = db.prepare(
-  'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+  'SELECT id, name, price, stock, unit, image FROM products WHERE id = ? OR slug = ?'
 ).get('pb-02', 'pb-02');
-const isOosAvailable = outOfStockProduct.status ? outOfStockProduct.status === 'active' : true;
 const hasOosStock = outOfStockProduct.stock !== null && outOfStockProduct.stock !== undefined ? outOfStockProduct.stock >= 1 : true;
+const isOosAvailable = outOfStockProduct.stock !== null && outOfStockProduct.stock !== undefined ? outOfStockProduct.stock > 0 : true;
 console.log('✓ Out of stock check:', { isOosAvailable, hasOosStock });
-if (hasOosStock !== false) throw new Error('Out of stock check should report false');
+if (hasOosStock !== false || isOosAvailable !== false) throw new Error('Out of stock check should report false');
 
-// Test inactive product validation
-const inactiveProduct = db.prepare(
-  'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+// Test available in-stock product validation
+const availableProduct = db.prepare(
+  'SELECT id, name, price, stock, unit, image FROM products WHERE id = ? OR slug = ?'
 ).get('pb-03', 'pb-03');
-const isInactiveAvailable = inactiveProduct.status ? inactiveProduct.status === 'active' : true;
-console.log('✓ Inactive product check:', { isInactiveAvailable });
-if (isInactiveAvailable !== false) throw new Error('Inactive product check should report false');
+const hasAvailStock = availableProduct.stock !== null && availableProduct.stock !== undefined ? availableProduct.stock >= 1 : true;
+const isProductAvailable = availableProduct.stock !== null && availableProduct.stock !== undefined ? availableProduct.stock > 0 : true;
+console.log('✓ In-stock product check:', { isProductAvailable, hasAvailStock });
+if (hasAvailStock !== true || isProductAvailable !== true) throw new Error('In-stock product check should report true');
 
 // 3. Test Product Listing Query in functions/api/products/index.ts
 const listQuery = `
@@ -162,8 +162,8 @@ const listQuery = `
     p.price, p.old_price as oldPrice, p.discount, p.unit, p.image, p.gallery,
     p.short_description as shortDescription, p.description, p.rating, 
     p.review_count as reviewCount, p.stock,
-    (CASE WHEN (p.status = 'active' OR p.status IS NULL) AND (p.stock IS NULL OR p.stock > 0) THEN 1 ELSE 0 END) as inStock,
-    p.origin, p.featured, p.new_arrival as newArrival, p.status
+    (CASE WHEN p.stock IS NULL OR p.stock > 0 THEN 1 ELSE 0 END) as inStock,
+    p.origin, p.featured, p.new_arrival as newArrival
   FROM products p
   LEFT JOIN categories c ON p.category_id = c.slug
   ORDER BY p.id ASC
@@ -171,7 +171,7 @@ const listQuery = `
 const listedProducts = db.prepare(listQuery).all();
 console.log('✓ Listed products count from D1:', listedProducts.length);
 if (listedProducts.length !== 3) throw new Error('Expected 3 products');
-console.log('✓ inStock flags calculated accurately:', listedProducts.map(p => ({ name: p.name, inStock: p.inStock, status: p.status, stock: p.stock })));
+console.log('✓ inStock flags calculated accurately based on stock column:', listedProducts.map(p => ({ name: p.name, inStock: p.inStock, stock: p.stock })));
 
 // 4. Test Order Submission Batch Transaction
 const testOrderId = 'ord-verify-col-01';

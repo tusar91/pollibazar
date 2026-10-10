@@ -12,8 +12,8 @@ export async function onRequestGet(context: { params: { id: string }; env: Env }
           p.price, p.old_price as oldPrice, p.discount, p.unit, p.image, p.gallery,
           p.short_description as shortDescription, p.description, p.rating, 
           p.review_count as reviewCount, p.stock,
-          (CASE WHEN (p.status = 'active' OR p.status IS NULL) AND (p.stock IS NULL OR p.stock > 0) THEN 1 ELSE 0 END) as inStock,
-          p.origin, p.featured, p.new_arrival as newArrival, p.status
+          (CASE WHEN p.stock IS NULL OR p.stock > 0 THEN 1 ELSE 0 END) as inStock,
+          p.origin, p.featured, p.new_arrival as newArrival
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.slug
         WHERE p.id = ? OR p.slug = ?
@@ -25,6 +25,7 @@ export async function onRequestGet(context: { params: { id: string }; env: Env }
           data: {
             ...product,
             inStock: Boolean(product.inStock),
+            isAvailable: Boolean(product.inStock && (product.stock === null || product.stock === undefined || Number(product.stock) > 0)),
             featured: Boolean(product.featured),
             newArrival: Boolean(product.newArrival),
           },
@@ -51,9 +52,6 @@ export async function onRequestPut(context: { params: { id: string }; request: R
 
   try {
     const body: any = await request.json();
-    const newStatus = body.status !== undefined 
-      ? body.status 
-      : (body.inStock !== undefined ? (body.inStock ? 'active' : 'inactive') : null);
 
     if (env.DB) {
       await env.DB.prepare(`
@@ -67,7 +65,6 @@ export async function onRequestPut(context: { params: { id: string }; request: R
           short_description = COALESCE(?, short_description),
           description = COALESCE(?, description),
           stock = COALESCE(?, stock),
-          status = COALESCE(?, status),
           featured = COALESCE(?, featured),
           new_arrival = COALESCE(?, new_arrival),
           updated_at = CURRENT_TIMESTAMP
@@ -82,7 +79,6 @@ export async function onRequestPut(context: { params: { id: string }; request: R
         body.shortDescription ?? null,
         body.description ?? null,
         body.stock !== undefined ? Number(body.stock) : null,
-        newStatus,
         body.featured !== undefined ? (body.featured ? 1 : 0) : null,
         body.newArrival !== undefined ? (body.newArrival ? 1 : 0) : null,
         params.id
