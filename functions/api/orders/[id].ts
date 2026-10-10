@@ -1,46 +1,72 @@
 import { Env, errorResponse, isAdminRole, isAuthorizedRole, isModeratorRole, jsonResponse, verifyAdminSession } from '../_utils';
 
+export async function onRequestOptions(context: { request: Request }) {
+  const origin = context.request.headers.get('Origin') || '*';
+  return new Response(null, {
+    status: 204,
+    headers: {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, PATCH, DELETE, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Access-Control-Allow-Credentials': 'true',
+    },
+  });
+}
+
 export async function onRequestGet(context: { params: { id: string }; env: Env }) {
   const { id } = context.params;
   const { env } = context;
 
-  if (env.DB) {
-    try {
-      const order = await env.DB.prepare(`
+  if (!env.DB) {
+    return errorResponse('ডাটাবেজ সংযোগ পাওয়া যায়নি।', 500);
+  }
+
+  try {
+    const order: any = await env.DB.prepare(`
+      SELECT 
+        o.id, o.order_number as orderId, o.customer_id, o.customer_name, o.customer_phone,
+        o.district, o.area, o.delivery_address, o.subtotal, o.delivery_charge as deliveryCharge,
+        o.discount, o.total, o.payment_method as paymentMethod, o.payment_number as paymentNumber,
+        o.trx_id as trxId, o.payment_status as paymentStatus, o.order_status as status,
+        o.customer_note as notes, o.created_at as createdAt
+      FROM orders o
+      WHERE o.order_number = ? OR o.id = ?
+    `).bind(id, id).first();
+
+    if (order) {
+      const { results: items } = await env.DB.prepare(`
         SELECT 
-          o.id, o.order_number as orderId, o.customer_id, o.customer_name, o.customer_phone,
-          o.district, o.area, o.delivery_address, o.subtotal, o.delivery_charge as deliveryCharge,
-          o.discount, o.total, o.payment_method as paymentMethod, o.payment_number as paymentNumber,
-          o.trx_id as trxId, o.payment_status as paymentStatus, o.order_status as status,
-          o.customer_note as notes, o.created_at as createdAt
-        FROM orders o
-        WHERE o.order_number = ? OR o.id = ?
-      `).bind(id, id).first();
+          oi.product_id as id, 
+          oi.product_name as name, 
+          oi.price, 
+          oi.quantity, 
+          oi.unit, 
+          oi.subtotal,
+          COALESCE(p.image, '') as image
+        FROM order_items oi
+        LEFT JOIN products p ON oi.product_id = p.id
+        WHERE oi.order_id = ?
+      `).bind(order.id).all();
 
-      if (order) {
-        const { results: items } = await env.DB.prepare(
-          'SELECT product_id as id, product_name as name, price, quantity, unit, subtotal FROM order_items WHERE order_id = ?'
-        ).bind(order.id).all();
-
-        return jsonResponse({
-          success: true,
-          data: {
-            ...order,
-            customer: {
-              fullName: order.customer_name,
-              phone: order.customer_phone,
-              district: order.district,
-              area: order.area,
-              address: order.delivery_address,
-              notes: order.notes,
-            },
-            items: items || [],
+      return jsonResponse({
+        success: true,
+        data: {
+          ...order,
+          customer: {
+            fullName: order.customer_name,
+            phone: order.customer_phone,
+            district: order.district,
+            area: order.area,
+            address: order.delivery_address,
+            notes: order.notes,
           },
-        });
-      }
-    } catch (e: any) {
-      console.error('Failed to get order from D1:', e);
+          items: items || [],
+        },
+      });
     }
+  } catch (e: any) {
+    console.error('Failed to get order from D1:', e);
+    return errorResponse('অর্ডার লোড করতে সমস্যা হয়েছে: ' + (e?.message || 'Error'), 500);
   }
 
   return errorResponse('অর্ডারটি পাওয়া যায়নি।', 404);
@@ -51,6 +77,10 @@ export async function onRequestPatch(context: { params: { id: string }; request:
   const auth = await verifyAdminSession(request, env);
   if (!auth.isValid) {
     return errorResponse('অননুমোদিত অ্যাক্সেস। অনুগ্রহ করে লগইন করুন।', 401);
+  }
+
+  if (!env.DB) {
+    return errorResponse('ডাটাবেজ সংযোগ পাওয়া যায়নি।', 500);
   }
 
   const isMod = isModeratorRole(auth.role);
@@ -104,15 +134,13 @@ export async function onRequestPatch(context: { params: { id: string }; request:
       }
     }
 
-    if (env.DB) {
-      await env.DB.prepare(`
-        UPDATE orders SET
-          order_status = COALESCE(?, order_status),
-          payment_status = COALESCE(?, payment_status),
-          updated_at = CURRENT_TIMESTAMP
-        WHERE order_number = ? OR id = ?
-      `).bind(status ?? null, paymentStatus ?? null, params.id, params.id).run();
-    }
+    const res = await env.DB.prepare(`
+      UPDATE orders SET
+        order_status = COALESCE(?, order_status),
+        payment_status = COALESCE(?, payment_status),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE order_number = ? OR id = ?
+    `).bind(status ?? null, paymentStatus ?? null, params.id, params.id).run();
 
     return jsonResponse({
       success: true,
@@ -135,16 +163,17 @@ export async function onRequestDelete(context: { params: { id: string }; request
     return errorResponse('শুধুমাত্র অ্যাডমিন অর্ডার মুছে ফেলতে পারেন। মডারেটরের এই অনুমতি নেই।', 403);
   }
 
-  if (env.DB) {
-    try {
-      await env.DB.prepare('DELETE FROM orders WHERE order_number = ? OR id = ?').bind(params.id, params.id).run();
-    } catch (e: any) {
-      return errorResponse('অর্ডার মুছতে সমস্যা হয়েছে: ' + (e?.message || 'Error'), 500);
-    }
+  if (!env.DB) {
+    return errorResponse('ডাটাবেজ সংযোগ পাওয়া যায়নি।', 500);
   }
 
-  return jsonResponse({
-    success: true,
-    message: 'অর্ডারটি সফলভাবে মুছে ফেলা হয়েছে।',
-  });
+  try {
+    await env.DB.prepare('DELETE FROM orders WHERE order_number = ? OR id = ?').bind(params.id, params.id).run();
+    return jsonResponse({
+      success: true,
+      message: 'অর্ডারটি সফলভাবে মুছে ফেলা হয়েছে।',
+    });
+  } catch (e: any) {
+    return errorResponse('অর্ডার মুছতে সমস্যা হয়েছে: ' + (e?.message || 'Error'), 500);
+  }
 }

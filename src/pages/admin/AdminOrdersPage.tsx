@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Eye,
   Filter,
@@ -9,6 +9,7 @@ import {
   Phone,
   MapPin,
   Calendar,
+  RefreshCw,
 } from 'lucide-react';
 import { AdminLayout } from './AdminLayout';
 import { useOrders } from '../../context/OrderContext';
@@ -16,39 +17,60 @@ import { Order, OrderStatus } from '../../types';
 import { ProductImage } from '../../components/ProductImage';
 
 export const AdminOrdersPage: React.FC = () => {
-  const { orders, updateOrderStatus, deleteOrder } = useOrders();
+  const { orders, updateOrderStatus, deleteOrder, fetchOrders, isLoading } = useOrders();
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isUpdating, setIsUpdating] = useState<string | null>(null);
+
+  // Hydrate fresh orders from D1 backend on mount
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
 
   const filteredOrders = orders.filter((o) => {
     const matchesStatus = statusFilter === 'all' || o.status === statusFilter;
+    const q = search.trim().toLowerCase();
     const matchesSearch =
-      !search.trim() ||
-      o.orderId.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.phone.includes(search.trim());
+      !q ||
+      Boolean(o.orderId && o.orderId.toLowerCase().includes(q)) ||
+      Boolean(o.customer?.fullName && o.customer.fullName.toLowerCase().includes(q)) ||
+      Boolean(o.customer?.phone && o.customer.phone.includes(search.trim()));
     return matchesStatus && matchesSearch;
   });
 
-  const handleStatusChange = (orderId: string, newStatus: OrderStatus) => {
-    updateOrderStatus(orderId, newStatus);
+  const handleStatusChange = async (orderId: string, newStatus: OrderStatus) => {
+    setIsUpdating(orderId);
+    await updateOrderStatus(orderId, newStatus);
     if (selectedOrder && selectedOrder.orderId === orderId) {
       setSelectedOrder({ ...selectedOrder, status: newStatus });
     }
+    setIsUpdating(null);
   };
 
   return (
     <AdminLayout currentTab="admin-orders">
       <div className="space-y-6">
-        <div>
-          <h2 className="text-xl font-bold text-stone-900 font-serif">
-            অর্ডার ব্যবস্থাপনা (Orders)
-          </h2>
-          <p className="text-xs text-stone-500 mt-0.5">
-            সর্বমোট {orders.length} টি অর্ডারের স্থিতি পরিচালনা ও পর্যবেক্ষণ
-          </p>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-stone-900 font-serif">
+              অর্ডার ব্যবস্থাপনা (Orders)
+            </h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              সর্বমোট {orders.length} টি অর্ডারের স্থিতি পরিচালনা ও পর্যবেক্ষণ
+            </p>
+          </div>
+
+          <button
+            onClick={() => fetchOrders()}
+            disabled={isLoading}
+            className="px-3.5 py-2 bg-white border border-stone-200 text-stone-700 hover:text-stone-900 hover:bg-stone-50 rounded-xl text-xs font-semibold flex items-center gap-2 shadow-2xs transition-all cursor-pointer self-start sm:self-auto"
+            title="নতুন অর্ডার লোড করুন"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin text-emerald-600' : 'text-stone-500'}`} />
+            <span>{isLoading ? 'রিফ্রেশ হচ্ছে...' : 'রিফ্রেশ করুন'}</span>
+          </button>
         </div>
 
         {/* Filter Bar */}
@@ -97,76 +119,88 @@ export const AdminOrdersPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-stone-100 text-stone-700">
-                {filteredOrders.map((o) => (
-                  <tr key={o.orderId} className="hover:bg-stone-50/60 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold text-emerald-800">
-                      {o.orderId}
-                      <div className="text-[10px] text-stone-400 font-sans tabular-bdt">
-                        {o.createdAt}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <div className="font-semibold text-stone-900">{o.customer.fullName}</div>
-                      <div className="text-[11px] text-stone-500">{o.customer.phone}</div>
-                      <div className="text-[10px] text-stone-400 truncate max-w-[150px]">
-                        {o.customer.district}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="font-medium text-stone-800">
-                        {o.items.length} টি আইটেম
-                      </span>
-                      <div className="text-[10px] text-stone-400 line-clamp-1">
-                        {o.items.map((i) => i.name).join(', ')}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 font-bold text-stone-900 tabular-bdt">
-                      ৳{o.total}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className="uppercase text-[11px] font-semibold block">
-                        {o.paymentMethod}
-                      </span>
-                      {o.trxId && (
-                        <span className="text-[10px] text-emerald-700 font-mono">
-                          Trx: {o.trxId}
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <select
-                        value={o.status}
-                        onChange={(e) =>
-                          handleStatusChange(o.orderId, e.target.value as OrderStatus)
-                        }
-                        className={`text-[11px] font-bold rounded-lg px-2 py-1 border cursor-pointer ${
-                          o.status === 'delivered'
-                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
-                            : o.status === 'shipped'
-                            ? 'bg-blue-50 text-blue-800 border-blue-200'
-                            : o.status === 'processing'
-                            ? 'bg-purple-50 text-purple-800 border-purple-200'
-                            : 'bg-amber-50 text-amber-800 border-amber-200'
-                        }`}
-                      >
-                        <option value="placed">Placed</option>
-                        <option value="processing">Processing</option>
-                        <option value="shipped">Shipped</option>
-                        <option value="out_for_delivery">Out for Delivery</option>
-                        <option value="delivered">Delivered</option>
-                      </select>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedOrder(o)}
-                        className="p-1.5 text-stone-500 hover:text-emerald-700 hover:bg-stone-100 rounded-lg transition-colors"
-                        title="বিস্তারিত দেখুন"
-                      >
-                        <Eye className="w-4 h-4" />
-                      </button>
+                {filteredOrders.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-stone-400">
+                      <ShoppingBag className="w-8 h-8 mx-auto mb-2 opacity-40 text-stone-400" />
+                      <p className="font-medium text-stone-600">কোনো অর্ডার পাওয়া যায়নি</p>
+                      <p className="text-[11px] text-stone-400 mt-1">
+                        ফিল্টার পরিবর্তন করুন অথবা নতুন অর্ডারের জন্য রিফ্রেশ বাটনে ক্লিক করুন।
+                      </p>
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredOrders.map((o) => (
+                    <tr key={o.orderId} className="hover:bg-stone-50/60 transition-colors">
+                      <td className="py-3 px-4 font-mono font-bold text-emerald-800">
+                        {o.orderId}
+                        <div className="text-[10px] text-stone-400 font-sans tabular-bdt">
+                          {o.createdAt}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-stone-900">{o.customer.fullName}</div>
+                        <div className="text-[11px] text-stone-500">{o.customer.phone}</div>
+                        <div className="text-[10px] text-stone-400 truncate max-w-[150px]">
+                          {o.customer.district}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="font-medium text-stone-800">
+                          {o.items.length} টি আইটেম
+                        </span>
+                        <div className="text-[10px] text-stone-400 line-clamp-1">
+                          {o.items.map((i) => i.name).join(', ')}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 font-bold text-stone-900 tabular-bdt">
+                        ৳{o.total}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className="uppercase text-[11px] font-semibold block">
+                          {o.paymentMethod}
+                        </span>
+                        {o.trxId && (
+                          <span className="text-[10px] text-emerald-700 font-mono">
+                            Trx: {o.trxId}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <select
+                          value={o.status}
+                          onChange={(e) =>
+                            handleStatusChange(o.orderId, e.target.value as OrderStatus)
+                          }
+                          className={`text-[11px] font-bold rounded-lg px-2 py-1 border cursor-pointer ${
+                            o.status === 'delivered'
+                              ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              : o.status === 'shipped'
+                              ? 'bg-blue-50 text-blue-800 border-blue-200'
+                              : o.status === 'processing'
+                              ? 'bg-purple-50 text-purple-800 border-purple-200'
+                              : 'bg-amber-50 text-amber-800 border-amber-200'
+                          }`}
+                        >
+                          <option value="placed">Placed</option>
+                          <option value="processing">Processing</option>
+                          <option value="shipped">Shipped</option>
+                          <option value="out_for_delivery">Out for Delivery</option>
+                          <option value="delivered">Delivered</option>
+                        </select>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => setSelectedOrder(o)}
+                          className="p-1.5 text-stone-500 hover:text-emerald-700 hover:bg-stone-100 rounded-lg transition-colors"
+                          title="বিস্তারিত দেখুন"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>

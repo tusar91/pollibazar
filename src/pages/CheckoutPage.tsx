@@ -25,7 +25,7 @@ export const CheckoutPage: React.FC = () => {
     setDeliveryDistrict,
     clearCart,
   } = useCart();
-  const { createOrder } = useOrders();
+  const { createOrder, savePlacedOrder } = useOrders();
   const { navigate } = useNavigation();
 
   // Form Fields
@@ -42,6 +42,7 @@ export const CheckoutPage: React.FC = () => {
 
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (cart.length === 0) {
@@ -102,6 +103,7 @@ export const CheckoutPage: React.FC = () => {
     e.preventDefault();
     if (!validate()) return;
 
+    setSubmitError(null);
     setIsSubmitting(true);
 
     // Prepare items
@@ -141,27 +143,34 @@ export const CheckoutPage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload),
       });
-      if (res.ok) {
-        const data: any = await res.json();
-        if (data.success && data.order) {
-          const apiOrder = createOrder({
-            ...orderPayload,
-            ...data.order,
-          });
-          clearCart();
-          setIsSubmitting(false);
-          navigate('order-success', { id: data.order.orderId || apiOrder.orderId });
-          return;
-        }
-      }
-    } catch {
-      // Graceful fallback to client-side order creation
-    }
 
-    const newOrder = createOrder(orderPayload);
-    clearCart();
-    setIsSubmitting(false);
-    navigate('order-success', { id: newOrder.orderId });
+      const data: any = await res.json().catch(() => null);
+
+      if (res.ok && data && data.success && data.order) {
+        // Order successfully created and stored in database
+        const confirmedOrder = {
+          ...orderPayload,
+          ...data.order,
+          orderId: data.order.orderId || data.order.id,
+        };
+
+        savePlacedOrder(confirmedOrder);
+        clearCart();
+        setIsSubmitting(false);
+        navigate('order-success', { id: confirmedOrder.orderId });
+        return;
+      } else {
+        // Server rejected or database insert failed
+        setIsSubmitting(false);
+        const serverError = data?.error || 'অর্ডারটি সার্ভারে সংরক্ষণ করা সম্ভব হয়নি। অনুগ্রহ করে আপনার তথ্যসমূহ পুনরায় যাচাই করে চেষ্টা করুন।';
+        setSubmitError(serverError);
+        return;
+      }
+    } catch (err: any) {
+      setIsSubmitting(false);
+      setSubmitError('সার্ভারের সাথে সংযোগ স্থাপন করা সম্ভব হয়নি। অনুগ্রহ করে আপনার ইন্টারনেট সংযোগ পরীক্ষা করুন।');
+      return;
+    }
   };
 
   return (
@@ -577,6 +586,13 @@ export const CheckoutPage: React.FC = () => {
                   <span className="font-bold text-emerald-800 text-lg tabular-bdt">৳{total}</span>
                 </div>
               </div>
+
+              {submitError && (
+                <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs p-3 rounded-xl flex items-start gap-2 animate-shake">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                  <span className="font-medium">{submitError}</span>
+                </div>
+              )}
 
               {/* Submit Button */}
               <button

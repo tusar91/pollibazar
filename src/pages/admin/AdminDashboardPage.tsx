@@ -16,7 +16,7 @@ import { useNavigation } from '../../context/NavigationContext';
 
 export const AdminDashboardPage: React.FC = () => {
   const { products } = useProducts();
-  const { orders } = useOrders();
+  const { orders, fetchOrders } = useOrders();
   const { navigate } = useNavigation();
 
   // Authenticated Admin State verified from /api/admin/me
@@ -29,6 +29,7 @@ export const AdminDashboardPage: React.FC = () => {
 
     const checkCurrentSession = async () => {
       try {
+        fetchOrders(true);
         const token = localStorage.getItem('pb_session_token') || '';
         const res = await fetch('/api/admin/me', {
           method: 'GET',
@@ -86,7 +87,7 @@ export const AdminDashboardPage: React.FC = () => {
   const totalRevenue = orders.reduce((sum, o) => sum + o.total, 0);
 
   // Unique customers
-  const uniqueCustomerPhones = new Set(orders.map((o) => o.customer.phone));
+  const uniqueCustomerPhones = new Set(orders.map((o) => o.customer?.phone).filter(Boolean));
   const totalCustomers = uniqueCustomerPhones.size;
 
   return (

@@ -23,22 +23,23 @@ export const AdminCustomersPage: React.FC = () => {
   const customerMap = new Map<string, CustomerSummary>();
 
   orders.forEach((o) => {
+    if (!o.customer?.phone) return;
     const key = o.customer.phone.trim();
     const existing = customerMap.get(key);
     if (existing) {
       existing.totalOrders += 1;
-      existing.totalSpent += o.total;
+      existing.totalSpent += (o.total || 0);
     } else {
       customerMap.set(key, {
-        name: o.customer.fullName,
+        name: o.customer.fullName || 'গ্রাহক',
         phone: o.customer.phone,
         email: o.customer.email,
-        district: o.customer.district,
-        area: o.customer.area,
-        address: o.customer.address,
+        district: o.customer.district || '',
+        area: o.customer.area || '',
+        address: o.customer.address || '',
         totalOrders: 1,
-        totalSpent: o.total,
-        lastOrderDate: o.createdAt,
+        totalSpent: o.total || 0,
+        lastOrderDate: o.createdAt || '',
       });
     }
   });
