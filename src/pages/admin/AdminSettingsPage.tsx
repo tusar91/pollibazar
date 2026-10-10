@@ -76,7 +76,7 @@ CREATE TABLE IF NOT EXISTS products (
   rating REAL DEFAULT 5.0,
   review_count INTEGER DEFAULT 0,
   stock INTEGER DEFAULT 0,
-  is_available BOOLEAN DEFAULT 1,
+  status TEXT DEFAULT 'active',
   origin TEXT,
   featured BOOLEAN DEFAULT 0,
   new_arrival BOOLEAN DEFAULT 0,

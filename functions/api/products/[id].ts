@@ -11,7 +11,8 @@ export async function onRequestGet(context: { params: { id: string }; env: Env }
           p.id, p.name, p.slug, p.category_id as category, c.name as categoryName,
           p.price, p.old_price as oldPrice, p.discount, p.unit, p.image, p.gallery,
           p.short_description as shortDescription, p.description, p.rating, 
-          p.review_count as reviewCount, p.stock, p.is_available as inStock,
+          p.review_count as reviewCount, p.stock,
+          (CASE WHEN (p.status = 'active' OR p.status IS NULL) AND (p.stock IS NULL OR p.stock > 0) THEN 1 ELSE 0 END) as inStock,
           p.origin, p.featured, p.new_arrival as newArrival, p.status
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.slug
@@ -50,6 +51,10 @@ export async function onRequestPut(context: { params: { id: string }; request: R
 
   try {
     const body: any = await request.json();
+    const newStatus = body.status !== undefined 
+      ? body.status 
+      : (body.inStock !== undefined ? (body.inStock ? 'active' : 'inactive') : null);
+
     if (env.DB) {
       await env.DB.prepare(`
         UPDATE products SET
@@ -62,7 +67,7 @@ export async function onRequestPut(context: { params: { id: string }; request: R
           short_description = COALESCE(?, short_description),
           description = COALESCE(?, description),
           stock = COALESCE(?, stock),
-          is_available = COALESCE(?, is_available),
+          status = COALESCE(?, status),
           featured = COALESCE(?, featured),
           new_arrival = COALESCE(?, new_arrival),
           updated_at = CURRENT_TIMESTAMP
@@ -77,7 +82,7 @@ export async function onRequestPut(context: { params: { id: string }; request: R
         body.shortDescription ?? null,
         body.description ?? null,
         body.stock !== undefined ? Number(body.stock) : null,
-        body.inStock !== undefined ? (body.inStock ? 1 : 0) : null,
+        newStatus,
         body.featured !== undefined ? (body.featured ? 1 : 0) : null,
         body.newArrival !== undefined ? (body.newArrival ? 1 : 0) : null,
         params.id

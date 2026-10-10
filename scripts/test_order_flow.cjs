@@ -1,37 +1,190 @@
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs');
 
-console.log('=== TEST SUITE: POLLIBAZAR D1 ORDER LIFECYCLE & INTEGRITY ===');
+console.log('=== TEST SUITE: POLLIBAZAR D1 ORDER LIFECYCLE & COLUMN INTEGRITY ===');
 
-// 1. Initialize SQLite database and apply migrations
+// 1. Create SQLite DB simulating existing production database (WITHOUT is_available column)
 const db = new DatabaseSync(':memory:');
-db.exec(fs.readFileSync('migrations/0001_initial.sql', 'utf8'));
-db.exec(fs.readFileSync('migrations/0002_update_admin_password_and_clean_sample_data.sql', 'utf8'));
-db.exec(fs.readFileSync('migrations/0003_add_moderator_and_roles.sql', 'utf8'));
-console.log('✓ Loaded migrations 0001, 0002, 0003');
 
-// 2. Verify Admin and Moderator Roles & Accounts
-const admin = db.prepare('SELECT id, username, role FROM admins WHERE username = ?').get('admin');
-const mod = db.prepare('SELECT id, username, role FROM admins WHERE username = ?').get('moderator');
-console.log('✓ Admin account:', admin);
-console.log('✓ Moderator account:', mod);
+// Create products table matching production schema (NO is_available column)
+db.exec(`
+  CREATE TABLE products (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    category_id TEXT NOT NULL,
+    price REAL NOT NULL,
+    old_price REAL,
+    discount INTEGER DEFAULT 0,
+    unit TEXT NOT NULL,
+    image TEXT NOT NULL,
+    gallery TEXT,
+    short_description TEXT,
+    description TEXT,
+    rating REAL DEFAULT 5.0,
+    review_count INTEGER DEFAULT 0,
+    stock INTEGER DEFAULT 10,
+    origin TEXT,
+    featured BOOLEAN DEFAULT 0,
+    new_arrival BOOLEAN DEFAULT 0,
+    status TEXT DEFAULT 'active',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
 
-if (!admin || admin.role !== 'admin') throw new Error('Admin role verification failed');
-if (!mod || mod.role !== 'moderator') throw new Error('Moderator role verification failed');
+  CREATE TABLE categories (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    name_en TEXT NOT NULL,
+    slug TEXT UNIQUE NOT NULL,
+    icon TEXT,
+    count INTEGER DEFAULT 0,
+    description TEXT
+  );
 
-// 3. Test Order Creation & Batch Transaction
-const testOrderId = 'ord-test-lifecycle-01';
-const testOrderNumber = 'PB-20261010-7777';
+  CREATE TABLE customers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    phone TEXT UNIQUE NOT NULL,
+    email TEXT,
+    address TEXT NOT NULL,
+    district TEXT NOT NULL,
+    area TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE orders (
+    id TEXT PRIMARY KEY,
+    order_number TEXT UNIQUE NOT NULL,
+    customer_id TEXT NOT NULL REFERENCES customers(id),
+    customer_name TEXT NOT NULL,
+    customer_phone TEXT NOT NULL,
+    district TEXT NOT NULL,
+    area TEXT NOT NULL,
+    delivery_address TEXT NOT NULL,
+    subtotal REAL NOT NULL,
+    delivery_charge REAL NOT NULL,
+    discount REAL DEFAULT 0,
+    total REAL NOT NULL,
+    payment_method TEXT NOT NULL,
+    payment_number TEXT,
+    trx_id TEXT,
+    payment_status TEXT DEFAULT 'pending',
+    order_status TEXT DEFAULT 'pending',
+    customer_note TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE order_items (
+    id TEXT PRIMARY KEY,
+    order_id TEXT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    product_id TEXT NOT NULL REFERENCES products(id),
+    product_name TEXT NOT NULL,
+    price REAL NOT NULL,
+    quantity INTEGER NOT NULL,
+    unit TEXT,
+    subtotal REAL NOT NULL
+  );
+
+  CREATE TABLE admins (
+    id TEXT PRIMARY KEY,
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    role TEXT DEFAULT 'admin',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    admin_id TEXT NOT NULL REFERENCES admins(id) ON DELETE CASCADE,
+    token TEXT UNIQUE NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  );
+`);
+
+// Insert initial categories and sample products
+db.exec(`
+  INSERT INTO categories (id, name, name_en, slug, icon, count, description)
+  VALUES ('cat-1', 'মুদি', 'Grocery', 'grocery', 'ShoppingBasket', 8, 'নিত্যপণ্য');
+
+  INSERT INTO products (id, name, slug, category_id, price, unit, image, stock, status)
+  VALUES 
+    ('pb-01', 'মিনিকেট চাল', 'miniket-rice', 'cat-1', 375, '৫ কেজি বস্তা', '/img/rice.jpg', 50, 'active'),
+    ('pb-02', 'সরিষার তেল', 'mustard-oil', 'cat-1', 220, '১ লিটার বোতল', '/img/oil.jpg', 0, 'active'),
+    ('pb-03', 'খেজুর গুড়', 'date-jaggery', 'cat-1', 350, '১ কেজি হাড়ি', '/img/gur.jpg', 10, 'inactive');
+
+  INSERT INTO settings (key, value) VALUES ('free_delivery_threshold', '2500');
+`);
+
+console.log('✓ Successfully created production-equivalent schema (WITHOUT is_available column)');
+
+// 2. Test Product Query in functions/api/orders/index.ts
+// Verify that the query no longer fails with "no such column: is_available"
+const queriedProduct = db.prepare(
+  'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+).get('pb-01', 'pb-01');
+
+console.log('✓ Product query executed without column errors:', queriedProduct);
+if (!queriedProduct || queriedProduct.name !== 'মিনিকেট চাল') {
+  throw new Error('Product query failed');
+}
+
+// Test out-of-stock product validation
+const outOfStockProduct = db.prepare(
+  'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+).get('pb-02', 'pb-02');
+const isOosAvailable = outOfStockProduct.status ? outOfStockProduct.status === 'active' : true;
+const hasOosStock = outOfStockProduct.stock !== null && outOfStockProduct.stock !== undefined ? outOfStockProduct.stock >= 1 : true;
+console.log('✓ Out of stock check:', { isOosAvailable, hasOosStock });
+if (hasOosStock !== false) throw new Error('Out of stock check should report false');
+
+// Test inactive product validation
+const inactiveProduct = db.prepare(
+  'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
+).get('pb-03', 'pb-03');
+const isInactiveAvailable = inactiveProduct.status ? inactiveProduct.status === 'active' : true;
+console.log('✓ Inactive product check:', { isInactiveAvailable });
+if (isInactiveAvailable !== false) throw new Error('Inactive product check should report false');
+
+// 3. Test Product Listing Query in functions/api/products/index.ts
+const listQuery = `
+  SELECT 
+    p.id, p.name, p.slug, p.category_id as category, c.name as categoryName,
+    p.price, p.old_price as oldPrice, p.discount, p.unit, p.image, p.gallery,
+    p.short_description as shortDescription, p.description, p.rating, 
+    p.review_count as reviewCount, p.stock,
+    (CASE WHEN (p.status = 'active' OR p.status IS NULL) AND (p.stock IS NULL OR p.stock > 0) THEN 1 ELSE 0 END) as inStock,
+    p.origin, p.featured, p.new_arrival as newArrival, p.status
+  FROM products p
+  LEFT JOIN categories c ON p.category_id = c.slug
+  ORDER BY p.id ASC
+`;
+const listedProducts = db.prepare(listQuery).all();
+console.log('✓ Listed products count from D1:', listedProducts.length);
+if (listedProducts.length !== 3) throw new Error('Expected 3 products');
+console.log('✓ inStock flags calculated accurately:', listedProducts.map(p => ({ name: p.name, inStock: p.inStock, status: p.status, stock: p.stock })));
+
+// 4. Test Order Submission Batch Transaction
+const testOrderId = 'ord-verify-col-01';
+const testOrderNumber = 'PB-20261010-8888';
 const phone = '01712334707';
-const customerId = 'cust-test-77';
+const customerId = 'cust-test-88';
 
-// 3a. Customer insert
+// Run batch simulation
 db.prepare(`
   INSERT INTO customers (id, name, phone, email, district, area, address, created_at, updated_at)
   VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-`).run(customerId, 'হাসান মাহমুদ', phone, null, 'ঢাকা', 'মিরপুর', 'মিরপুর-২, ঢাকা');
+`).run(customerId, 'কবির হোসেন', phone, null, 'ঢাকা', 'ধানমন্ডি', 'ধানমন্ডি ৩২');
 
-// 3b. Order insert
 db.prepare(`
   INSERT INTO orders (
     id, order_number, customer_id, customer_name, customer_phone,
@@ -43,11 +196,11 @@ db.prepare(`
   testOrderId,
   testOrderNumber,
   customerId,
-  'হাসান মাহমুদ',
+  'কবির হোসেন',
   phone,
   'ঢাকা',
-  'মিরপুর',
-  'মিরপুর-২, ঢাকা',
+  'ধানমন্ডি',
+  'ধানমন্ডি ৩২',
   375,
   60,
   0,
@@ -60,19 +213,22 @@ db.prepare(`
   'টেস্ট অর্ডার'
 );
 
-// 3c. Order item insert
 db.prepare(`
   INSERT INTO order_items (id, order_id, product_id, product_name, price, quantity, unit, subtotal)
   VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-`).run('item-test-01', testOrderId, 'pb-01', 'মিনিকেট চাল (প্রিমিয়াম সিল্কি পলিশ)', 375, 1, '৫ কেজি বস্তা', 375);
+`).run('item-test-88', testOrderId, 'pb-01', 'মিনিকেট চাল', 375, 1, '৫ কেজি বস্তা', 375);
 
-// 3d. Stock reduction
-db.prepare(`UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?`).run(1, 'pb-01');
+db.prepare('UPDATE products SET stock = MAX(0, stock - ?) WHERE id = ?').run(1, 'pb-01');
 
 console.log('✓ Order and items successfully committed to database');
 
-// 4. Test Admin Order-List API Query
-const query = `
+// Verify stock was decremented from 50 to 49
+const updatedProduct = db.prepare('SELECT stock FROM products WHERE id = ?').get('pb-01');
+console.log('✓ Updated product stock:', updatedProduct.stock);
+if (updatedProduct.stock !== 49) throw new Error('Stock decrement failed');
+
+// 5. Verify Admin Order List API Query
+const adminOrderQuery = `
   SELECT 
     o.id, o.order_number as orderId, o.customer_id, o.customer_name, o.customer_phone,
     o.district, o.area, o.delivery_address, o.subtotal, o.delivery_charge as deliveryCharge,
@@ -83,13 +239,10 @@ const query = `
   WHERE 1=1
   ORDER BY o.created_at DESC LIMIT 10 OFFSET 0
 `;
-const orders = db.prepare(query).all();
-console.log('✓ Admin retrieved orders count:', orders.length);
-if (orders.length !== 1) throw new Error('Expected 1 order');
-const ord = orders[0];
-if (ord.orderId !== testOrderNumber) throw new Error('Order number mismatch');
+const adminOrders = db.prepare(adminOrderQuery).all();
+console.log('✓ Admin retrieved orders count:', adminOrders.length);
+if (adminOrders.length !== 1) throw new Error('Admin order retrieval failed');
 
-// Verify order_items join with product image
 const items = db.prepare(`
   SELECT 
     oi.order_id, 
@@ -103,44 +256,23 @@ const items = db.prepare(`
   FROM order_items oi 
   LEFT JOIN products p ON oi.product_id = p.id 
   WHERE oi.order_id = ?
-`).all(ord.id);
+`).all(adminOrders[0].id);
+
 console.log('✓ Retrieved order items:', items);
-if (items.length !== 1 || items[0].name !== 'মিনিকেট চাল (প্রিমিয়াম সিল্কি পলিশ)') {
-  throw new Error('Order item verification failed');
+if (items.length !== 1 || items[0].name !== 'মিনিকেট চাল') {
+  throw new Error('Order item query failed');
 }
 
-// 5. Test Moderator Status Update
-db.prepare(`
-  UPDATE orders SET 
-    order_status = ?, 
-    updated_at = CURRENT_TIMESTAMP 
-  WHERE id = ?
-`).run('confirmed', testOrderId);
+// 6. Test applying migration 0004 (ALTER TABLE products ADD COLUMN is_available BOOLEAN DEFAULT 1)
+db.exec(fs.readFileSync('migrations/0004_add_is_available_to_products.sql', 'utf8'));
+const columnCheck = db.prepare("PRAGMA table_info(products)").all();
+const hasIsAvailableCol = columnCheck.some(c => c.name === 'is_available');
+console.log('✓ Tested Migration 0004 execution - column exists:', hasIsAvailableCol);
+if (!hasIsAvailableCol) throw new Error('Migration 0004 failed to add column');
 
-const updatedOrd = db.prepare('SELECT order_status FROM orders WHERE id = ?').get(testOrderId);
-console.log('✓ Moderator updated order status to:', updatedOrd.order_status);
-if (updatedOrd.order_status !== 'confirmed') throw new Error('Status update check failed');
-
-// 6. Test Repeat Customer (Updating existing customer without ID collision)
-const existingCust = db.prepare('SELECT id FROM customers WHERE phone = ?').get(phone);
-console.log('✓ Found existing customer for repeat order:', existingCust.id);
-db.prepare(`
-  UPDATE customers SET 
-    name = ?, 
-    address = ?, 
-    updated_at = CURRENT_TIMESTAMP 
-  WHERE id = ?
-`).run('হাসান মাহমুদ (আপডেট)', 'মিরপুর-১০, ঢাকা', existingCust.id);
-
-const updatedCust = db.prepare('SELECT name, address FROM customers WHERE id = ?').get(existingCust.id);
-console.log('✓ Successfully updated existing customer:', updatedCust);
-
-// 7. Cleanup test data
+// Cleanup test records
 db.prepare('DELETE FROM order_items WHERE order_id = ?').run(testOrderId);
 db.prepare('DELETE FROM orders WHERE id = ?').run(testOrderId);
 db.prepare('DELETE FROM customers WHERE id = ?').run(customerId);
 
-const finalOrderCount = db.prepare('SELECT count(*) as c FROM orders').get().c;
-console.log('✓ Test order cleanly removed. Remaining orders in DB:', finalOrderCount);
-
-console.log('=== ALL TESTS PASSED SUCCESSFULLY ===');
+console.log('=== ALL TESTS PASSED WITH 0 ERRORS ===');

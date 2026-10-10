@@ -15,7 +15,8 @@ export async function onRequestGet(context: { request: Request; env: Env }) {
           p.id, p.name, p.slug, p.category_id as category, c.name as categoryName,
           p.price, p.old_price as oldPrice, p.discount, p.unit, p.image, p.gallery,
           p.short_description as shortDescription, p.description, p.rating, 
-          p.review_count as reviewCount, p.stock, p.is_available as inStock,
+          p.review_count as reviewCount, p.stock,
+          (CASE WHEN (p.status = 'active' OR p.status IS NULL) AND (p.stock IS NULL OR p.stock > 0) THEN 1 ELSE 0 END) as inStock,
           p.origin, p.featured, p.new_arrival as newArrival, p.status
         FROM products p
         LEFT JOIN categories c ON p.category_id = c.slug
@@ -92,8 +93,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         INSERT INTO products (
           id, name, slug, category_id, price, old_price, discount, unit,
           image, short_description, description, rating, review_count, stock,
-          is_available, origin, featured, new_arrival, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          origin, featured, new_arrival, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id,
         body.name,
@@ -109,11 +110,10 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         body.rating || 5.0,
         body.reviewCount || 0,
         body.stock !== undefined ? Number(body.stock) : 10,
-        body.inStock !== false ? 1 : 0,
         body.origin || '',
         body.featured ? 1 : 0,
         body.newArrival ? 1 : 0,
-        body.status || 'active'
+        body.status || (body.inStock !== false ? 'active' : 'inactive')
       ).run();
 
       // Record image into product_images table (Requirement 3)

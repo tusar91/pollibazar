@@ -211,14 +211,16 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
       let imageUrl = item.image || '';
       let validProductId = String(item.id || '');
 
-      // Query product in D1
+      // Query product in D1 using existing status and stock columns
       const dbProduct: any = await env.DB.prepare(
-        'SELECT id, name, price, stock, is_available, unit, image FROM products WHERE id = ? OR slug = ?'
+        'SELECT id, name, price, stock, status, unit, image FROM products WHERE id = ? OR slug = ?'
       ).bind(item.id, item.id).first();
 
       if (dbProduct) {
-        if (!dbProduct.is_available || (dbProduct.stock !== null && dbProduct.stock < quantity)) {
-          return errorResponse(`দুঃখিত, "${dbProduct.name}" বর্তমানে পর্যাপ্ত স্টকে নেই।`, 409, undefined, request);
+        const isAvailable = dbProduct.status ? dbProduct.status === 'active' : true;
+        const hasStock = dbProduct.stock !== null && dbProduct.stock !== undefined ? Number(dbProduct.stock) >= quantity : true;
+        if (!isAvailable || !hasStock) {
+          return errorResponse(`দুঃখিত, "${dbProduct.name}" বর্তমানে পর্যাপ্ত স্টকে নেই বা বিক্রির জন্য সক্রিয় নয়।`, 409, undefined, request);
         }
         validProductId = dbProduct.id;
         unitPrice = Number(dbProduct.price);
@@ -230,8 +232,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
         const safeSlug = `prod-${validProductId.toLowerCase().replace(/[^a-z0-9]/g, '-') || Date.now()}`;
         await env.DB.prepare(`
           INSERT OR IGNORE INTO products (
-            id, name, slug, category_id, price, unit, image, stock, is_available
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 1)
+            id, name, slug, category_id, price, unit, image, stock, status
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 100, 'active')
         `).bind(
           validProductId,
           productName,
